@@ -1,47 +1,73 @@
 # Silver Mirror Social Media Manager
 
-AI-powered Instagram DM handling and comment moderation for Silver Mirror Facial Bar.
+AI-powered Instagram DM handling, comment moderation, and social media management for Silver Mirror Facial Bar.
 
-## What it does
+## What It Does
 
-- **Instagram DMs** — Automatically responds to direct messages using Claude AI with the full Silver Mirror knowledge base (services, pricing, locations, routing).
-- **Comment Moderation** — Classifies every new comment (positive, negative, spam, question) and takes action: replies to positive comments, hides negative/spam, flags complaints for human review.
-- **Activity Logging** — Every DM and moderation action is logged to Google Sheets for monitoring.
+### Instagram DMs
+- Automatically responds to direct messages using Claude AI with the full Silver Mirror knowledge base (10 locations, services, pricing, skin concern recommendations)
+- Smart routing: membership questions → memberships@, collaborations → Sierra, complaints → location phone, etc.
+- Handles voice messages, images, and non-text messages gracefully
+- Auto-escalates to human after 4 unresolved exchanges
+
+### Comment Moderation (Aggressive Mode)
+- Classifies every comment: positive, negative, spam, question, profanity, competitor, political, off-topic, scam
+- **Aggressive moderation**: hides anything not clearly positive
+- Replies to positive comments with warm, on-brand responses (30 pre-built templates)
+- Hides + flags legitimate complaints for human review with severity levels
+- Tracks spam count per user — auto-blocks after 3 spam comments in 30 days
+- Confidence-based thresholds: auto-action at ≥85%, human review queue for 50-84%
+
+### Logging & Monitoring
+- Every DM and moderation action logged to Google Sheets with 12 columns
+- Confidence scores, severity, triggers, and human review flags tracked
+- Dashboard for quick status checks
 
 ## Architecture
 
-Built on the same stack as the SM Member Cancel bot:
+| Component | Technology |
+|-----------|-----------|
+| Runtime | Next.js 14 (App Router) on Vercel |
+| AI | Claude Sonnet via Anthropic API |
+| Messaging | Meta Instagram Graph API |
+| Logging | Google Sheets API |
+| Moderation | Claude classifier + policy engine |
 
-- **Next.js 14** (App Router) on **Vercel**
-- **Claude API** (Sonnet) for response generation + comment classification
-- **Meta Instagram Graph API** for DMs and comment management
-- **Google Sheets** for activity logging
+## File Structure
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── instagram/webhook/route.js   # Meta webhook (GET verify + POST events)
+│   │   └── health/route.js              # Health check + env status
+│   ├── dashboard/page.js                # Monitoring dashboard
+│   ├── layout.js
+│   └── page.js
+└── lib/
+    ├── claude.js              # Claude API — DM responses + comment classifier
+    ├── comment-handler.js     # Comment moderation with policy enforcement
+    ├── dm-handler.js          # DM routing, escalation, conversation tracking
+    ├── instagram.js           # Instagram Graph API helpers (send, reply, hide)
+    ├── moderation-policy.js   # Rules, thresholds, severity, escalation config
+    ├── routing.js             # 10 locations + contact directory + fuzzy matching
+    ├── sheets.js              # Google Sheets logging (12-column schema)
+    ├── system-prompt.txt      # Full SM knowledge base + routing + scenarios
+    └── templates.js           # 30 pre-built reply templates
+```
 
 ## Setup
 
-1. Clone: `git clone https://github.com/silvermirrorfb/sm-social-media-manager.git`
-2. Install: `npm install`
+1. `git clone https://github.com/silvermirrorfb/sm-social-media-manager.git`
+2. `npm install`
 3. Copy `.env.example` → `.env` and fill in credentials
-4. Dev: `npm run dev`
+   - Google Sheets auth supports either:
+     - `GOOGLE_SERVICE_ACCOUNT_JSON` (single JSON blob, same pattern as cancel bot), or
+     - `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY` (split fields)
+4. `npm run dev`
 
-## Environment Variables
+## 10 Locations
 
-| Variable | Description |
-|---|---|
-| `META_APP_SECRET` | From Meta Developer Dashboard |
-| `META_VERIFY_TOKEN` | Random string you choose for webhook verification |
-| `INSTAGRAM_ACCESS_TOKEN` | Long-lived token from Meta |
-| `INSTAGRAM_ACCOUNT_ID` | Your Instagram Business account ID |
-| `ANTHROPIC_API_KEY` | Claude API key |
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | For Sheets logging |
-| `GOOGLE_PRIVATE_KEY` | For Sheets logging |
-| `GOOGLE_SHEET_ID` | Target spreadsheet ID |
-
-## API Endpoints
-
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/api/instagram/webhook` | GET | Meta webhook verification |
-| `/api/instagram/webhook` | POST | Receives DM + comment events |
-| `/api/health` | GET | Health check + env status |
-| `/dashboard` | — | Monitoring dashboard |
+NYC: Upper East Side, Flatiron, Bryant Park, Manhattan West, Upper West Side
+DC: Dupont Circle, Navy Yard, Penn Quarter
+Miami: Brickell, Coral Gables
