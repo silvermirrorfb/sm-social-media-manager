@@ -1,0 +1,23 @@
+{
+  "name": "sm-social-media-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Silver Mirror Social Media Manager — AI-powered Instagram DM handling and comment moderation",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/silvermirrorfb/sm-social-media-manager.git"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "googleapis": "^144.0.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
+}
