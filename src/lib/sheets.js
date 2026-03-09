@@ -2,31 +2,32 @@ import { google } from 'googleapis';
 
 let sheetsClient = null;
 
-function getGoogleCredentials() {
-  const rawServiceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (rawServiceAccountJson) {
-    try {
-      const parsed = JSON.parse(rawServiceAccountJson);
-      return {
-        client_email: parsed.client_email,
-        private_key: (parsed.private_key || '').replace(/\\n/g, '\n'),
-      };
-    } catch (err) {
-      console.error('[Sheets] Invalid GOOGLE_SERVICE_ACCOUNT_JSON:', err.message);
-    }
-  }
-
-  return {
-    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-  };
-}
-
 function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
 
+  // Support both patterns:
+  // 1. GOOGLE_SERVICE_ACCOUNT_JSON (single JSON blob — same as cancel bot)
+  // 2. Separate GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY
+  let credentials;
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    } catch (err) {
+      console.error('[Sheets] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', err.message);
+      return null;
+    }
+  } else if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+    credentials = {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    };
+  } else {
+    console.warn('[Sheets] No Google credentials configured');
+    return null;
+  }
+
   const auth = new google.auth.GoogleAuth({
-    credentials: getGoogleCredentials(),
+    credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
@@ -45,6 +46,8 @@ export async function logToSheet(data) {
   }
 
   const sheets = getSheetsClient();
+  if (!sheets) return;
+
   const row = [
     data.timestamp || new Date().toISOString(),
     data.type || '',
@@ -78,6 +81,8 @@ export async function initSheetHeaders() {
   if (!sheetId) return;
 
   const sheets = getSheetsClient();
+  if (!sheets) return;
+
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,

@@ -61,9 +61,6 @@ src/
 1. `git clone https://github.com/silvermirrorfb/sm-social-media-manager.git`
 2. `npm install`
 3. Copy `.env.example` → `.env` and fill in credentials
-   - Google Sheets auth supports either:
-     - `GOOGLE_SERVICE_ACCOUNT_JSON` (single JSON blob, same pattern as cancel bot), or
-     - `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY` (split fields)
 4. `npm run dev`
 
 ## 10 Locations
