@@ -10,18 +10,19 @@ const ESCALATION_THRESHOLD = 4; // After 4 user messages, offer human handoff
 
 function getConversation(senderId) {
   const convo = conversations.get(senderId);
-  if (!convo) return { messages: [], userMessageCount: 0 };
+  if (!convo) return { messages: [], userMessageCount: 0, hasEscalated: false };
   if (Date.now() - convo.lastActive > CONVERSATION_TTL) {
     conversations.delete(senderId);
-    return { messages: [], userMessageCount: 0 };
+    return { messages: [], userMessageCount: 0, hasEscalated: false };
   }
   return convo;
 }
 
-function saveConversation(senderId, messages, userMessageCount) {
+function saveConversation(senderId, messages, userMessageCount, hasEscalated) {
   conversations.set(senderId, {
     messages,
     userMessageCount,
+    hasEscalated,
     lastActive: Date.now(),
   });
 }
@@ -30,6 +31,10 @@ function saveConversation(senderId, messages, userMessageCount) {
 export async function handleDirectMessage(event) {
   const senderId = event.sender?.id;
   const messageText = event.message?.text;
+  if (!senderId) {
+    console.warn('[DM] Missing sender id; skipping event');
+    return;
+  }
 
   // Skip echo messages (messages sent by our own account)
   if (event.message?.is_echo) return;
@@ -77,15 +82,14 @@ export async function handleDirectMessage(event) {
   try {
     // Get conversation history
     const convo = getConversation(senderId);
-    let { messages: history, userMessageCount } = convo;
+    let { messages: history, userMessageCount, hasEscalated } = convo;
     userMessageCount++;
 
     let responseText;
+    let escalatedThisMessage = false;
 
     // Check if we should escalate to human
-    if (userMessageCount >= ESCALATION_THRESHOLD && !history.some(
-      m => m.role === 'assistant' && m.content.includes('share your email')
-    )) {
+    if (userMessageCount >= ESCALATION_THRESHOLD && !hasEscalated) {
       // Detect if Spanish — offer Spanish escalation with Miami store number
       const isSpanish = /[áéíóúñ¿¡]/.test(messageText) ||
         /\b(hola|gracias|quiero|puedo|tengo|necesito|cuánto|dónde|cuándo)\b/i.test(messageText);
@@ -95,6 +99,8 @@ export async function handleDirectMessage(event) {
       } else {
         responseText = "Let me have someone on our team follow up with you directly. Can you share your email? 💛";
       }
+      hasEscalated = true;
+      escalatedThisMessage = true;
     } else {
       // Generate response using Claude with full SM knowledge base
       responseText = await generateDMResponse(messageText, history);
@@ -109,7 +115,7 @@ export async function handleDirectMessage(event) {
       { role: 'user', content: messageText },
       { role: 'assistant', content: responseText },
     ].slice(-10);
-    saveConversation(senderId, updatedHistory, userMessageCount);
+    saveConversation(senderId, updatedHistory, userMessageCount, hasEscalated);
 
     // Get username for logging
     const profile = await getUserProfile(senderId).catch(() => ({ username: senderId }));
@@ -121,7 +127,7 @@ export async function handleDirectMessage(event) {
       username: profile.username || senderId,
       incomingMessage: messageText,
       response: responseText,
-      action: userMessageCount >= ESCALATION_THRESHOLD ? 'escalated' : 'replied',
+      action: escalatedThisMessage ? 'escalated' : 'replied',
       category: '',
       reason: '',
     }).catch((err) => console.error('[DM] Sheet logging failed:', err));

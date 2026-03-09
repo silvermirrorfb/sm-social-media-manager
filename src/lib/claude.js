@@ -5,6 +5,39 @@ import { MODERATION_CONFIG } from './moderation-policy';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+const VALID_ACTIONS = new Set(['reply', 'hide', 'hide_and_flag', 'ignore', 'block']);
+const VALID_CATEGORIES = new Set([
+  'positive',
+  'negative',
+  'spam',
+  'question',
+  'neutral',
+  'profanity',
+  'competitor',
+  'political',
+  'off_topic',
+  'scam',
+]);
+
+function normalizeClassification(raw) {
+  const confidenceValue = Number(raw?.confidence);
+  const confidence = Number.isFinite(confidenceValue)
+    ? Math.max(0, Math.min(1, confidenceValue))
+    : 0;
+
+  const triggers = Array.isArray(raw?.triggers)
+    ? raw.triggers.filter((item) => typeof item === 'string')
+    : [];
+
+  const category = VALID_CATEGORIES.has(raw?.category) ? raw.category : 'neutral';
+  const action = VALID_ACTIONS.has(raw?.action) ? raw.action : 'hide';
+  const severity = ['high', 'medium', 'low'].includes(raw?.severity) ? raw.severity : 'low';
+  const replyText = typeof raw?.replyText === 'string' ? raw.replyText : null;
+  const reason = typeof raw?.reason === 'string' ? raw.reason : 'normalized fallback';
+
+  return { category, confidence, action, replyText, triggers, severity, reason };
+}
+
 // Load system prompt once at startup
 let systemPrompt = null;
 function getSystemPrompt() {
@@ -97,7 +130,9 @@ Respond ONLY with the JSON object.`;
     .join('');
 
   try {
-    const result = JSON.parse(text.replace(/```json|```/g, '').trim());
+    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    const result = normalizeClassification(parsed);
+
     // Add follower-based trigger if applicable
     if (followerCount && followerCount >= MODERATION_CONFIG.verifiedFollowerThreshold) {
       if (!result.triggers.includes('verified_large_account')) {

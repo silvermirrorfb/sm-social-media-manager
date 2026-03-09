@@ -1,4 +1,4 @@
-import { replyToComment, hideComment, getComment } from './instagram';
+import { replyToComment, hideComment } from './instagram';
 import { classifyComment } from './claude';
 import { logToSheet } from './sheets';
 import { needsHumanReview, classifySeverity, PARTNER_WHITELIST, BLOCK_LIST } from './moderation-policy';
