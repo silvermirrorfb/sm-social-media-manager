@@ -1,6 +1,7 @@
 import { sendDirectMessage, getUserProfile } from './instagram';
 import { generateDMResponse } from './claude';
 import { logToSheet } from './sheets';
+import { getSmartDMResponse } from './dm-smart-router';
 
 // ─── In-memory conversation store ───────────────────────────
 // TODO: Migrate to Redis for serverless durability
@@ -73,7 +74,7 @@ export async function handleDirectMessage(event) {
         "I'm not able to listen to voice messages, but I'd love to help! Could you type out your question?"
       );
       await logToSheet({
-        type: 'DM',
+        type: 'INSTAGRAM_DM',
         timestamp: new Date().toISOString(),
         username: senderId,
         incomingMessage: '[voice message]',
@@ -89,7 +90,7 @@ export async function handleDirectMessage(event) {
         "Thanks for sharing! While I can give general guidance, the best way to get a personalized recommendation is to book an Esthetician's Choice facial — your esthetician will do a full skin analysis and customize the treatment. Book at booking.silvermirror.com!"
       );
       await logToSheet({
-        type: 'DM',
+        type: 'INSTAGRAM_DM',
         timestamp: new Date().toISOString(),
         username: senderId,
         incomingMessage: '[image]',
@@ -105,7 +106,7 @@ export async function handleDirectMessage(event) {
     }
 
     await logToSheet({
-      type: 'DM',
+      type: 'INSTAGRAM_DM',
       timestamp: new Date().toISOString(),
       username: senderId,
       incomingMessage: eventLabel,
@@ -143,8 +144,8 @@ export async function handleDirectMessage(event) {
       hasEscalated = true;
       escalatedThisMessage = true;
     } else {
-      // Generate response using Claude with full SM knowledge base
-      responseText = await generateDMResponse(messageText, history);
+      const smartReply = getSmartDMResponse(messageText);
+      responseText = smartReply || await generateDMResponse(messageText, history);
     }
 
     // Send the reply
@@ -163,7 +164,7 @@ export async function handleDirectMessage(event) {
 
     // Log to Google Sheets
     await logToSheet({
-      type: 'DM',
+      type: 'INSTAGRAM_DM',
       timestamp: new Date().toISOString(),
       username: profile.username || senderId,
       incomingMessage: messageText,
@@ -177,7 +178,7 @@ export async function handleDirectMessage(event) {
   } catch (err) {
     console.error('[DM] Handler error:', err);
     await logToSheet({
-      type: 'DM',
+      type: 'INSTAGRAM_DM',
       timestamp: new Date().toISOString(),
       username: senderId,
       incomingMessage: messageText || '[non-text message]',

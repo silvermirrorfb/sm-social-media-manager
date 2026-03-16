@@ -20,6 +20,43 @@ const VALID_CATEGORIES = new Set([
   'scam',
 ]);
 
+const PROFANITY_PATTERNS = [
+  /\bfuck\b/i,
+  /\bfucking\b/i,
+  /\bshit\b/i,
+  /\bbitch\b/i,
+  /\basshole\b/i,
+  /\bdumbass\b/i,
+];
+
+const SCAM_PATTERNS = [
+  /dm me/i,
+  /promote (it|yourself)/i,
+  /crypto/i,
+  /forex/i,
+  /bitcoin/i,
+  /link in bio/i,
+  /earn \$?\d+/i,
+];
+
+const NEGATIVE_PATTERNS = [
+  /\bterrible\b/i,
+  /\bawful\b/i,
+  /\bhorrible\b/i,
+  /\bworst\b/i,
+  /\brude\b/i,
+  /\bdisappointed\b/i,
+  /\bdisappointing\b/i,
+  /\bscam\b/i,
+  /\bnever again\b/i,
+  /\brefund\b/i,
+  /\bcharged me\b/i,
+  /\bbad experience\b/i,
+  /\bunacceptable\b/i,
+  /\bhurt\b/i,
+  /\bburned\b/i,
+];
+
 function normalizeClassification(raw) {
   const confidenceValue = Number(raw?.confidence);
   const confidence = Number.isFinite(confidenceValue)
@@ -37,6 +74,46 @@ function normalizeClassification(raw) {
   const reason = typeof raw?.reason === 'string' ? raw.reason : 'normalized fallback';
 
   return { category, confidence, action, replyText, triggers, severity, reason };
+}
+
+function preclassifyComment(commentText) {
+  if (PROFANITY_PATTERNS.some((pattern) => pattern.test(commentText))) {
+    return {
+      category: 'profanity',
+      confidence: 0.99,
+      action: 'hide',
+      replyText: null,
+      triggers: [],
+      severity: 'high',
+      reason: 'Matched profanity heuristic',
+    };
+  }
+
+  if (SCAM_PATTERNS.some((pattern) => pattern.test(commentText))) {
+    return {
+      category: 'scam',
+      confidence: 0.99,
+      action: 'hide',
+      replyText: null,
+      triggers: [],
+      severity: 'medium',
+      reason: 'Matched scam heuristic',
+    };
+  }
+
+  if (NEGATIVE_PATTERNS.some((pattern) => pattern.test(commentText))) {
+    return {
+      category: 'negative',
+      confidence: 0.97,
+      action: 'hide_and_flag',
+      replyText: null,
+      triggers: ['legitimate_complaint'],
+      severity: 'high',
+      reason: 'Matched negative-feedback heuristic',
+    };
+  }
+
+  return null;
 }
 
 // Load system prompt once at startup
@@ -61,6 +138,7 @@ export async function generateDMResponse(userMessage, conversationHistory = []) 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 500,
+    temperature: 0.2,
     system: getSystemPrompt(),
     messages,
   });
@@ -76,6 +154,11 @@ export async function generateDMResponse(userMessage, conversationHistory = []) 
 // ─── Classify a comment ─────────────────────────────────────
 // Returns: { category, confidence, action, replyText, triggers, severity, reason }
 export async function classifyComment(commentText, username, followerCount = null) {
+  const heuristic = preclassifyComment(commentText);
+  if (heuristic) {
+    return heuristic;
+  }
+
   const classifierPrompt = `You are a comment moderator for Silver Mirror Facial Bar, a luxury facial bar brand.
 
 Classify this Instagram comment and decide the action. AGGRESSIVE moderation is enabled — hide anything that isn't clearly positive or a genuine question.
@@ -122,6 +205,7 @@ Respond ONLY with the JSON object.`;
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 400,
+    temperature: 0,
     messages: [{ role: 'user', content: classifierPrompt }],
   });
 

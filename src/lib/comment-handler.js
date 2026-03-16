@@ -1,7 +1,13 @@
 import { replyToComment, hideComment } from './instagram';
 import { classifyComment } from './claude';
 import { logToSheet } from './sheets';
-import { needsHumanReview, classifySeverity, PARTNER_WHITELIST, BLOCK_LIST } from './moderation-policy';
+import {
+  AUTO_HIDE_CATEGORIES,
+  needsHumanReview,
+  classifySeverity,
+  PARTNER_WHITELIST,
+  BLOCK_LIST,
+} from './moderation-policy';
 import { getInstagramAccountId } from './env';
 
 // ─── In-memory spam tracker ─────────────────────────────────
@@ -35,6 +41,26 @@ export async function handleComment(commentData) {
     return;
   }
 
+  if (BLOCK_LIST.includes(`@${username}`)) {
+    await hideComment(commentId);
+    await logToSheet({
+      type: 'INSTAGRAM_COMMENT',
+      timestamp: new Date().toISOString(),
+      username,
+      incomingMessage: commentText || '',
+      response: '',
+      action: 'block',
+      category: 'spam',
+      reason: 'Matched manual block list',
+      confidence: '1.00',
+      severity: 'high',
+      triggers: 'manual_block_list',
+      needsReview: 'YES',
+    }).catch(() => {});
+    console.log(`[Comment] Hidden comment from blocked user @${username}`);
+    return;
+  }
+
   console.log(`[Comment] @${username}: ${commentText?.substring(0, 80)}...`);
 
   if (!commentText) {
@@ -45,7 +71,18 @@ export async function handleComment(commentData) {
   try {
     // Classify the comment using Claude
     const classification = await classifyComment(commentText, username);
-    const { category, confidence, action, replyText, triggers, severity, reason } = classification;
+    let { category, confidence, action, replyText, triggers, severity, reason } = classification;
+
+    if (AUTO_HIDE_CATEGORIES.includes(category) && action === 'reply') {
+      action = category === 'negative' ? 'hide_and_flag' : 'hide';
+      replyText = null;
+      reason = `${reason || 'policy override'}; auto-hide override`;
+    }
+
+    if (category === 'negative' && action !== 'hide_and_flag') {
+      action = 'hide_and_flag';
+      replyText = null;
+    }
 
     console.log(`[Comment] Classified: ${category} (${(confidence * 100).toFixed(0)}% conf) → ${action}`);
 
@@ -96,7 +133,7 @@ export async function handleComment(commentData) {
 
     // Log everything to Google Sheets
     await logToSheet({
-      type: 'COMMENT',
+      type: 'INSTAGRAM_COMMENT',
       timestamp: new Date().toISOString(),
       username,
       incomingMessage: commentText,
