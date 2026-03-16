@@ -15,6 +15,8 @@ export async function GET() {
   // Facebook Page env checks
   const hasFacebookPageToken = hasEnv('FACEBOOK_PAGE_ACCESS_TOKEN');
   const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
+  const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
+  const hasTikTokClientSecret = hasEnv('TIKTOK_CLIENT_SECRET');
 
   return NextResponse.json({
     status: 'ok',
@@ -33,6 +35,9 @@ export async function GET() {
       hasFacebookPageToken,
       hasFacebookPageId,
       facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
+      hasTikTokClientKey,
+      hasTikTokClientSecret,
+      tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
     },
   });
 }
