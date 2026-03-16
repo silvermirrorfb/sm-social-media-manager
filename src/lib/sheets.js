@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 
 let sheetsClient = null;
+const LOG_SHEET_NAME = 'Instagram Log';
 
 function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
@@ -66,7 +67,7 @@ export async function logToSheet(data) {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: 'Instagram Log!A:L',
+      range: `${LOG_SHEET_NAME}!A:L`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [row] },
     });
@@ -86,13 +87,13 @@ export async function initSheetHeaders() {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'Instagram Log!A1:L1',
+      range: `${LOG_SHEET_NAME}!A1:L1`,
     });
 
     if (!res.data.values || res.data.values.length === 0) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
-        range: 'Instagram Log!A1:L1',
+        range: `${LOG_SHEET_NAME}!A1:L1`,
         valueInputOption: 'RAW',
         requestBody: {
           values: [[
@@ -106,5 +107,26 @@ export async function initSheetHeaders() {
     }
   } catch (err) {
     console.error('[Sheets] Init headers failed:', err.message);
+  }
+}
+
+export async function getRecentLogRows(limit = 150) {
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+  if (!sheetId) return [];
+
+  const sheets = getSheetsClient();
+  if (!sheets) return [];
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `${LOG_SHEET_NAME}!A2:L`,
+    });
+
+    const rows = res.data.values || [];
+    return rows.slice(-limit).reverse();
+  } catch (err) {
+    console.error('[Sheets] Read logs failed:', err.message);
+    return [];
   }
 }
