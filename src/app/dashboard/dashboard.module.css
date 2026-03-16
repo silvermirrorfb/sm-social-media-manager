@@ -46,6 +46,12 @@
   gap: 20px;
 }
 
+.heroActions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
 .title {
   margin: 0;
   font-size: clamp(2rem, 4vw, 3.4rem);
@@ -69,6 +75,17 @@
   padding: 10px 14px;
   font-size: 0.92rem;
   color: var(--ink);
+}
+
+.logoutButton {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 14px;
+  cursor: pointer;
 }
 
 .heroMeta {
@@ -440,6 +457,11 @@
 
   .statusPill {
     width: 100%;
+  }
+
+  .heroActions {
+    width: 100%;
+    justify-items: stretch;
   }
 
   .toolbar,

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import styles from './dashboard.module.css';
 import { getRecentLogRows } from '@/lib/sheets';
+import { logoutAction } from './login/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -261,8 +262,15 @@ export default async function DashboardPage({ searchParams }) {
                 are staged so the view can expand cleanly as soon as those channels are wired in.
               </p>
             </div>
-            <div className={styles.statusPill}>
-              Bot status: <strong>{takeoverStatus.label}</strong>
+            <div className={styles.heroActions}>
+              <div className={styles.statusPill}>
+                Bot status: <strong>{takeoverStatus.label}</strong>
+              </div>
+              <form action={logoutAction}>
+                <button className={styles.logoutButton} type="submit">
+                  Log out
+                </button>
+              </form>
             </div>
           </div>
 
