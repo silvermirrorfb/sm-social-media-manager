@@ -11,6 +11,10 @@ export async function GET() {
   const hasVerifyToken = hasEnv('META_VERIFY_TOKEN');
   const hasInstagramAccountId = Boolean(getInstagramAccountId());
 
+  // Facebook Page env checks
+  const hasFacebookPageToken = hasEnv('FACEBOOK_PAGE_ACCESS_TOKEN');
+  const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
+
   return NextResponse.json({
     status: 'ok',
     app: 'sm-social-media-manager',
@@ -24,6 +28,9 @@ export async function GET() {
       hasVerifyToken,
       hasInstagramAccountId,
       metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
+      hasFacebookPageToken,
+      hasFacebookPageId,
+      facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
     },
   });
 }

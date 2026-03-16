@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { handleDirectMessage } from '@/lib/dm-handler';
 import { handleComment } from '@/lib/comment-handler';
+import { handleMessengerMessage } from '@/lib/fb-dm-handler';
+import { handleFacebookComment } from '@/lib/fb-comment-handler';
 import { getEnv } from '@/lib/env';
 
 const VERIFY_TOKEN = getEnv('META_VERIFY_TOKEN');
@@ -168,6 +170,64 @@ export async function POST(request) {
         }
       } else {
         console.log('[Webhook] No actionable instagram tasks found');
+      }
+    } else if (eventType === 'page') {
+      const tasks = [];
+      let messengerEvents = 0;
+      let commentEvents = 0;
+
+      for (const entry of body.entry || []) {
+        // ── Messenger Messages ──
+        if (entry.messaging) {
+          for (const event of entry.messaging) {
+            messengerEvents++;
+            tasks.push(
+              handleMessengerMessage(event).catch((err) =>
+                console.error('[Webhook] Messenger handler error:', err)
+              )
+            );
+          }
+        }
+
+        // ── Page Comments (via feed changes) ──
+        if (entry.changes) {
+          for (const change of entry.changes) {
+            if (change.field === 'feed' && change.value?.item === 'comment') {
+              commentEvents++;
+              tasks.push(
+                handleFacebookComment(change.value).catch((err) =>
+                  console.error('[Webhook] FB comment handler error:', err)
+                )
+              );
+            }
+          }
+        }
+      }
+
+      console.log('[Webhook] Accepted page payload', {
+        matchedHeader: signatureResult.matchedHeader,
+        algo: signatureResult.algo,
+        entries: Array.isArray(body.entry) ? body.entry.length : 0,
+        messengerEvents,
+        commentEvents,
+      });
+
+      if (tasks.length > 0) {
+        const startedAt = Date.now();
+        const results = await Promise.allSettled(tasks);
+        const failedCount = results.filter((result) => result.status === 'rejected').length;
+
+        console.log('[Webhook] Completed page payload', {
+          taskCount: tasks.length,
+          failedCount,
+          durationMs: Date.now() - startedAt,
+        });
+
+        if (failedCount > 0) {
+          console.warn(`[Webhook] ${failedCount} page webhook tasks failed`);
+        }
+      } else {
+        console.log('[Webhook] No actionable page tasks found');
       }
     }
 

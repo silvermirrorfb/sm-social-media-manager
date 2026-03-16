@@ -6,26 +6,33 @@ import { getInstagramAccountId, hasEnv } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
-const PLATFORMS = [
-  {
-    key: 'instagram',
-    name: 'Instagram',
-    status: 'live',
-    description: 'Live now. DMs and comments are reaching production, and the bot is replying in real time.',
-  },
-  {
-    key: 'facebook',
-    name: 'Facebook',
-    status: 'staged',
-    description: 'Dashboard support is ready. Channel wiring and platform credentials still need to be connected.',
-  },
-  {
-    key: 'tiktok',
-    name: 'TikTok',
-    status: 'staged',
-    description: 'Reserved for the next channel rollout. Visibility is ready before ingestion is live.',
-  },
-];
+function getPlatforms(env) {
+  const fbReady = env.facebookWebhookReady;
+  return [
+    {
+      key: 'instagram',
+      name: 'Instagram',
+      status: 'live',
+      description:
+        'Live now. DMs and comments are reaching production, and the bot is replying in real time.',
+    },
+    {
+      key: 'facebook',
+      name: 'Facebook',
+      status: fbReady ? 'live' : 'staged',
+      description: fbReady
+        ? 'Live now. Messenger DMs and Page comments are reaching production, and the bot is replying in real time.'
+        : 'Webhook support is ready. Set FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID on Vercel to go live.',
+    },
+    {
+      key: 'tiktok',
+      name: 'TikTok',
+      status: 'staged',
+      description:
+        'Reserved for the next channel rollout. Visibility is ready before ingestion is live.',
+    },
+  ];
+}
 
 const CHANNEL_LABELS = {
   all: 'All activity',
@@ -55,10 +62,14 @@ function getEnvSnapshot() {
     hasEnv('GOOGLE_SERVICE_ACCOUNT_JSON') ||
     (hasEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL') && hasEnv('GOOGLE_PRIVATE_KEY'));
 
+  const hasFacebookPageToken = hasEnv('FACEBOOK_PAGE_ACCESS_TOKEN');
+  const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
+
   return {
     hasGoogleCreds,
     hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
     metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
+    facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
   };
 }
 
@@ -170,30 +181,47 @@ function toDayKey(timestamp) {
 }
 
 function getTakeoverStatus(platformKey, env, entries) {
-  if (platformKey !== 'instagram') {
+  if (platformKey === 'instagram') {
+    if (!env.metaWebhookReady) {
+      return {
+        label: 'Waiting on platform readiness',
+        body: 'Instagram should not be treated as fully owned by the bot until Meta webhook settings and credentials are complete.',
+      };
+    }
+    if (entries.length === 0) {
+      return {
+        label: 'Configured, watching for traffic',
+        body: 'Instagram is configured, but the team should wait for live traffic before treating the bot as fully operational.',
+      };
+    }
     return {
-      label: 'Staged for rollout',
-      body: 'This channel has a seat in the dashboard already, but live ingestion and reply delivery still need platform setup before the bot can take over there.',
+      label: 'Actively answering',
+      body: 'Instagram is live. New DMs and comments are reaching production and the bot is handling them while the team watches the queue here.',
     };
   }
 
-  if (!env.metaWebhookReady) {
+  if (platformKey === 'facebook') {
+    if (!env.facebookWebhookReady) {
+      return {
+        label: 'Waiting on platform readiness',
+        body: 'Facebook Page should not be treated as fully owned by the bot until FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID are set and the Page webhook is subscribed.',
+      };
+    }
+    if (entries.length === 0) {
+      return {
+        label: 'Configured, watching for traffic',
+        body: 'Facebook is configured, but the team should wait for live traffic before treating the bot as fully operational.',
+      };
+    }
     return {
-      label: 'Waiting on platform readiness',
-      body: 'Instagram should not be treated as fully owned by the bot until Meta webhook settings and credentials are complete.',
-    };
-  }
-
-  if (entries.length === 0) {
-    return {
-      label: 'Configured, watching for traffic',
-      body: 'Instagram is configured, but the team should wait for live traffic before treating the bot as fully operational.',
+      label: 'Actively answering',
+      body: 'Facebook is live. Messenger DMs and Page comments are reaching production and the bot is handling them while the team watches the queue here.',
     };
   }
 
   return {
-    label: 'Actively answering',
-    body: 'Instagram is live. New DMs and comments are reaching production and the bot is handling them while the team watches the queue here.',
+    label: 'Staged for rollout',
+    body: 'This channel has a seat in the dashboard already, but live ingestion and reply delivery still need platform setup before the bot can take over there.',
   };
 }
 
@@ -389,6 +417,9 @@ function getSeverityClass(severity) {
 }
 
 export default async function DashboardPage({ searchParams }) {
+  const env = getEnvSnapshot();
+  const PLATFORMS = getPlatforms(env);
+
   const selectedPlatform = PLATFORMS.some((platform) => platform.key === searchParams?.platform)
     ? searchParams.platform
     : 'instagram';
@@ -399,7 +430,6 @@ export default async function DashboardPage({ searchParams }) {
 
   const rawRows = await getRecentLogRows(250);
   const entries = rawRows.map(normalizeLogRow);
-  const env = getEnvSnapshot();
 
   const platformEntries = entries.filter((entry) => entry.platform === selectedPlatform);
   const channelEntries =
@@ -552,6 +582,10 @@ export default async function DashboardPage({ searchParams }) {
                 <div className={styles.opsRow}>
                   <strong>Instagram takeover</strong>
                   <p>{env.metaWebhookReady ? 'Configured and handling production traffic.' : 'Meta webhook setup is not complete yet.'}</p>
+                </div>
+                <div className={styles.opsRow}>
+                  <strong>Facebook takeover</strong>
+                  <p>{env.facebookWebhookReady ? 'Configured and handling production traffic.' : 'Facebook Page credentials not set yet.'}</p>
                 </div>
                 <div className={styles.opsRow}>
                   <strong>Last logged event</strong>
