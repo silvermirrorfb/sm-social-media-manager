@@ -231,6 +231,13 @@
   gap: 10px;
 }
 
+.viewPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+
 .channelPill {
   text-decoration: none;
   color: inherit;
@@ -267,6 +274,81 @@
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.inlineMeta {
+  margin-top: 8px !important;
+  font-size: 0.86rem;
+}
+
+.barList {
+  display: grid;
+  gap: 14px;
+}
+
+.barRow {
+  display: grid;
+  gap: 8px;
+}
+
+.barMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.barTrack {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(23, 20, 20, 0.08);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d96f4a 0%, #f39c74 100%);
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.toolbarText {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.searchForm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.searchInput {
+  min-width: 320px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 12px 14px;
+  color: var(--ink);
+  font: inherit;
+}
+
+.searchButton {
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fffaf6;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .tableWrap {
@@ -357,6 +439,17 @@
   }
 
   .statusPill {
+    width: 100%;
+  }
+
+  .toolbar,
+  .searchForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchInput {
+    min-width: 0;
     width: 100%;
   }
 }

@@ -31,6 +31,13 @@ const CHANNEL_LABELS = {
   comment: 'Comments',
 };
 
+const VIEW_LABELS = {
+  all: 'Everything',
+  review: 'Needs review',
+  unanswered: 'No bot reply',
+  escalated: 'Escalated',
+};
+
 function getEnvSnapshot() {
   const hasMetaToken = !!process.env.INSTAGRAM_ACCESS_TOKEN;
   const hasMetaSecret = !!process.env.META_APP_SECRET;
@@ -51,7 +58,9 @@ function normalizeLogRow(row) {
   const type = (row[1] || '').toUpperCase();
   const channel = type === 'DM' ? 'dm' : type === 'COMMENT' ? 'comment' : 'other';
   const action = row[5] || '';
+  const actionLower = action.toLowerCase();
   const response = row[4] || '';
+  const needsReview = (row[11] || '').toUpperCase() === 'YES';
 
   return {
     timestamp: row[0] || '',
@@ -66,9 +75,10 @@ function normalizeLogRow(row) {
     confidence: row[8] || '',
     severity: row[9] || '',
     triggers: row[10] || '',
-    needsReview: row[11] || '',
-    direction: response ? 'incoming-outgoing' : 'incoming-only',
+    needsReview,
     botAnswered: Boolean(response),
+    isEscalated: actionLower.includes('escalat'),
+    isModerated: actionLower.includes('hide') || actionLower.includes('block'),
   };
 }
 
@@ -88,12 +98,13 @@ function buildSummary(entries) {
   return entries.reduce(
     (acc, entry) => {
       if (entry.botAnswered) acc.answered += 1;
-      if ((entry.action || '').toLowerCase().includes('escalat')) acc.escalated += 1;
-      if ((entry.needsReview || '').toUpperCase() === 'YES') acc.needsReview += 1;
-      if ((entry.action || '').toLowerCase().includes('hide')) acc.moderated += 1;
+      if (entry.isEscalated) acc.escalated += 1;
+      if (entry.needsReview) acc.needsReview += 1;
+      if (entry.isModerated) acc.moderated += 1;
+      if (!entry.botAnswered) acc.unanswered += 1;
       return acc;
     },
-    { answered: 0, escalated: 0, needsReview: 0, moderated: 0 }
+    { answered: 0, escalated: 0, needsReview: 0, moderated: 0, unanswered: 0 }
   );
 }
 
@@ -138,12 +149,71 @@ function getTakeoverStatus(platformKey, env, entries) {
   };
 }
 
-function buildHref(platform, channel) {
+function buildHref(platform, channel, view = 'all', q = '') {
   const params = new URLSearchParams();
   params.set('platform', platform);
   if (channel && channel !== 'all') params.set('channel', channel);
+  if (view && view !== 'all') params.set('view', view);
+  if (q) params.set('q', q);
   const query = params.toString();
   return query ? `/dashboard?${query}` : '/dashboard';
+}
+
+function matchesSearch(entry, search) {
+  if (!search) return true;
+  const haystack = [
+    entry.username,
+    entry.incomingMessage,
+    entry.response,
+    entry.action,
+    entry.category,
+    entry.reason,
+    entry.triggers,
+  ]
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(search.toLowerCase());
+}
+
+function matchesView(entry, view) {
+  if (view === 'review') return entry.needsReview;
+  if (view === 'unanswered') return !entry.botAnswered;
+  if (view === 'escalated') return entry.isEscalated;
+  return true;
+}
+
+function getTopQueue(entries) {
+  return entries
+    .filter((entry) => entry.needsReview || !entry.botAnswered || entry.isEscalated)
+    .slice(0, 5);
+}
+
+function getVolumeByChannel(entries) {
+  return [
+    {
+      key: 'dm',
+      label: 'DMs',
+      count: entries.filter((entry) => entry.channel === 'dm').length,
+    },
+    {
+      key: 'comment',
+      label: 'Comments',
+      count: entries.filter((entry) => entry.channel === 'comment').length,
+    },
+  ];
+}
+
+function getPlatformStatusClass(status) {
+  return status === 'live' ? styles.badgeLive : styles.badgePending;
+}
+
+function getFlagText(entry) {
+  const parts = [];
+  if (entry.needsReview) parts.push('needs review');
+  if (entry.isEscalated) parts.push('escalated');
+  if (entry.isModerated) parts.push('moderated');
+  if (!entry.botAnswered) parts.push('no reply logged');
+  return parts.join(' • ') || 'normal flow';
 }
 
 export default async function DashboardPage({ searchParams }) {
@@ -151,22 +221,32 @@ export default async function DashboardPage({ searchParams }) {
     ? searchParams.platform
     : 'instagram';
   const selectedChannel = CHANNEL_LABELS[searchParams?.channel] ? searchParams.channel : 'all';
+  const selectedView = VIEW_LABELS[searchParams?.view] ? searchParams.view : 'all';
+  const search = typeof searchParams?.q === 'string' ? searchParams.q.trim() : '';
 
-  const rawRows = await getRecentLogRows(160);
+  const rawRows = await getRecentLogRows(200);
   const entries = rawRows.map(normalizeLogRow);
   const env = getEnvSnapshot();
 
   const platformEntries = entries.filter((entry) => entry.platform === selectedPlatform);
-  const visibleEntries =
+  const channelEntries =
     selectedChannel === 'all'
       ? platformEntries
       : platformEntries.filter((entry) => entry.channel === selectedChannel);
+  const visibleEntries = channelEntries
+    .filter((entry) => matchesView(entry, selectedView))
+    .filter((entry) => matchesSearch(entry, search));
 
   const channelCounts = buildChannelCounts(platformEntries);
   const summary = buildSummary(platformEntries);
   const selectedPlatformConfig =
     PLATFORMS.find((platform) => platform.key === selectedPlatform) || PLATFORMS[0];
   const takeoverStatus = getTakeoverStatus(selectedPlatform, env, platformEntries);
+  const topQueue = getTopQueue(platformEntries);
+  const volumeByChannel = getVolumeByChannel(platformEntries);
+  const answerRate = platformEntries.length
+    ? Math.round((summary.answered / platformEntries.length) * 100)
+    : 0;
 
   return (
     <main className={styles.page}>
@@ -200,8 +280,8 @@ export default async function DashboardPage({ searchParams }) {
               <div className={styles.heroValue}>{summary.answered}</div>
             </div>
             <div className={styles.heroCard}>
-              <span className={styles.heroLabel}>Needs review</span>
-              <div className={styles.heroValue}>{summary.needsReview}</div>
+              <span className={styles.heroLabel}>Answer rate</span>
+              <div className={styles.heroValue}>{answerRate}%</div>
             </div>
           </div>
         </section>
@@ -212,18 +292,14 @@ export default async function DashboardPage({ searchParams }) {
             {PLATFORMS.map((platform) => (
               <Link
                 key={platform.key}
-                href={buildHref(platform.key, 'all')}
+                href={buildHref(platform.key, 'all', 'all', '')}
                 className={`${styles.platformCard} ${
                   selectedPlatform === platform.key ? styles.platformCardActive : ''
                 }`}
               >
                 <div className={styles.platformHeader}>
                   <h3 className={styles.platformName}>{platform.name}</h3>
-                  <span
-                    className={`${styles.badge} ${
-                      platform.status === 'live' ? styles.badgeLive : styles.badgePending
-                    }`}
-                  >
+                  <span className={`${styles.badge} ${getPlatformStatusClass(platform.status)}`}>
                     {platform.status}
                   </span>
                 </div>
@@ -241,7 +317,7 @@ export default async function DashboardPage({ searchParams }) {
                 {Object.entries(CHANNEL_LABELS).map(([channelKey, label]) => (
                   <Link
                     key={channelKey}
-                    href={buildHref(selectedPlatform, channelKey)}
+                    href={buildHref(selectedPlatform, channelKey, selectedView, search)}
                     className={`${styles.channelPill} ${
                       selectedChannel === channelKey ? styles.channelPillActive : ''
                     }`}
@@ -295,12 +371,92 @@ export default async function DashboardPage({ searchParams }) {
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Conversation log</h2>
+          <div className={styles.statsGrid}>
+            <div className={styles.panel}>
+              <h2 className={styles.panelTitle}>Triage queue</h2>
+              {topQueue.length === 0 ? (
+                <div className={styles.emptyState}>
+                  Nothing is waiting for attention right now. As soon as something needs review, gets escalated, or
+                  comes in without a reply logged, it will show up here.
+                </div>
+              ) : (
+                <div className={styles.opsList}>
+                  {topQueue.map((entry, index) => (
+                    <div className={styles.opsRow} key={`${entry.timestamp}-${entry.username}-${index}`}>
+                      <strong>@{entry.username}</strong>
+                      <p>{entry.incomingMessage || 'No incoming text logged.'}</p>
+                      <p className={styles.inlineMeta}>
+                        {formatTimestamp(entry.timestamp)} {' · '} {entry.channel} {' · '} {getFlagText(entry)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.panel}>
+              <h2 className={styles.panelTitle}>Volume snapshot</h2>
+              <div className={styles.barList}>
+                {volumeByChannel.map((item) => {
+                  const width = platformEntries.length ? Math.max(12, (item.count / platformEntries.length) * 100) : 12;
+                  return (
+                    <div key={item.key} className={styles.barRow}>
+                      <div className={styles.barMeta}>
+                        <span>{item.label}</span>
+                        <strong>{item.count}</strong>
+                      </div>
+                      <div className={styles.barTrack}>
+                        <div className={styles.barFill} style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <div className={styles.toolbar}>
+            <div>
+              <h2 className={styles.sectionTitle}>Conversation log</h2>
+              <p className={styles.toolbarText}>
+                Filter this to what your team actually needs to work right now.
+              </p>
+            </div>
+            <form action="/dashboard" className={styles.searchForm}>
+              <input type="hidden" name="platform" value={selectedPlatform} />
+              {selectedChannel !== 'all' ? <input type="hidden" name="channel" value={selectedChannel} /> : null}
+              {selectedView !== 'all' ? <input type="hidden" name="view" value={selectedView} /> : null}
+              <input
+                className={styles.searchInput}
+                type="search"
+                name="q"
+                defaultValue={search}
+                placeholder="Search username, message, reply, category..."
+              />
+              <button className={styles.searchButton} type="submit">
+                Filter
+              </button>
+            </form>
+          </div>
+
+          <div className={styles.viewPills}>
+            {Object.entries(VIEW_LABELS).map(([viewKey, label]) => (
+              <Link
+                key={viewKey}
+                href={buildHref(selectedPlatform, selectedChannel, viewKey, search)}
+                className={`${styles.channelPill} ${selectedView === viewKey ? styles.channelPillActive : ''}`}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+
           {visibleEntries.length === 0 ? (
             <div className={styles.emptyState}>
-              No {selectedPlatformConfig.name} {CHANNEL_LABELS[selectedChannel].toLowerCase()} have been logged yet.
-              Once activity comes in, your team will be able to see the incoming message, the bot response, and
-              any moderation/escalation decision here.
+              No {selectedPlatformConfig.name} {CHANNEL_LABELS[selectedChannel].toLowerCase()} match this view right now.
+              Try removing filters or wait for the next event to come in.
             </div>
           ) : (
             <div className={styles.tableWrap}>
@@ -329,7 +485,7 @@ export default async function DashboardPage({ searchParams }) {
                         {entry.category ? <div className={styles.mono}>{entry.category}</div> : null}
                       </td>
                       <td>
-                        <div>{entry.needsReview || 'no review flag'}</div>
+                        <div>{getFlagText(entry)}</div>
                         {entry.triggers ? <div className={styles.mono}>{entry.triggers}</div> : null}
                         {entry.reason ? <div className={styles.mono}>{entry.reason}</div> : null}
                       </td>
