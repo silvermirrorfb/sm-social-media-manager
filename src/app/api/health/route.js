@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hasEnv } from '@/lib/env';
+import { getInstagramAccountId, hasEnv } from '@/lib/env';
 
 export async function GET() {
   const hasGoogleCreds =
@@ -9,7 +9,7 @@ export async function GET() {
   const hasMetaToken = hasEnv('INSTAGRAM_ACCESS_TOKEN');
   const hasMetaSecret = hasEnv('INSTAGRAM_APP_SECRET', 'META_APP_SECRET');
   const hasVerifyToken = hasEnv('META_VERIFY_TOKEN');
-  const hasInstagramAccountId = hasEnv('INSTAGRAM_ACCOUNT', 'INSTAGRAM_ACCOUNT_ID');
+  const hasInstagramAccountId = Boolean(getInstagramAccountId());
 
   return NextResponse.json({
     status: 'ok',

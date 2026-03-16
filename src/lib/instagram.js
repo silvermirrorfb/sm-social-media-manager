@@ -1,4 +1,4 @@
-import { getEnv } from './env';
+import { getEnv, getInstagramAccountId } from './env';
 
 // ─── Instagram Graph API Helpers ────────────────────────────
 // Handles all communication with Meta's Instagram Graph API.
@@ -9,7 +9,7 @@ const GRAPH_URL = 'https://graph.instagram.com/v21.0';
 function getInstagramConfig() {
   return {
     accessToken: getEnv('INSTAGRAM_ACCESS_TOKEN'),
-    accountId: getEnv('INSTAGRAM_ACCOUNT', 'INSTAGRAM_ACCOUNT_ID'),
+    accountId: getInstagramAccountId(),
   };
 }
 

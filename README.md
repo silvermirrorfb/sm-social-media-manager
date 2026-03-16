@@ -66,6 +66,7 @@ src/
 Meta env note:
 - Preferred: `INSTAGRAM_APP_SECRET` and `INSTAGRAM_ACCOUNT`
 - Legacy fallback still supported: `META_APP_SECRET` and `INSTAGRAM_ACCOUNT_ID`
+- The account value must be the numeric Instagram account ID, not the `@username`
 
 ## 10 Locations
 

@@ -25,3 +25,16 @@ export function getEnv(...keys) {
 export function hasEnv(...keys) {
   return Boolean(getEnv(...keys));
 }
+
+export function getInstagramAccountId() {
+  const candidates = [
+    getEnv('INSTAGRAM_ACCOUNT_ID'),
+    getEnv('INSTAGRAM_ACCOUNT'),
+  ];
+
+  for (const value of candidates) {
+    if (/^\d+$/.test(value)) return value;
+  }
+
+  return '';
+}

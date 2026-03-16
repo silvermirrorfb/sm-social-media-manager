@@ -2,7 +2,7 @@ import Link from 'next/link';
 import styles from './dashboard.module.css';
 import { getRecentLogRows } from '@/lib/sheets';
 import { logoutAction } from './login/actions';
-import { hasEnv } from '@/lib/env';
+import { getInstagramAccountId, hasEnv } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +44,7 @@ function getEnvSnapshot() {
   const hasMetaToken = hasEnv('INSTAGRAM_ACCESS_TOKEN');
   const hasMetaSecret = hasEnv('INSTAGRAM_APP_SECRET', 'META_APP_SECRET');
   const hasVerifyToken = hasEnv('META_VERIFY_TOKEN');
-  const hasInstagramAccountId = hasEnv('INSTAGRAM_ACCOUNT', 'INSTAGRAM_ACCOUNT_ID');
+  const hasInstagramAccountId = Boolean(getInstagramAccountId());
   const hasGoogleCreds =
     hasEnv('GOOGLE_SERVICE_ACCOUNT_JSON') ||
     (hasEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL') && hasEnv('GOOGLE_PRIVATE_KEY'));
