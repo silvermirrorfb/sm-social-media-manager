@@ -1,11 +1,13 @@
+import { getEnv } from './env';
+
 const DASHBOARD_COOKIE_NAME = 'sm_dashboard_session';
 const DASHBOARD_AUTH_SALT = 'sm-dashboard-v1';
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_CREDENTIAL_HASH = '834ebf8cc81f54a710ed350f65fecdee329a710c089c72a660922639b31944b6';
 
 function getAuthSource() {
-  const username = process.env.DASHBOARD_USERNAME?.trim();
-  const password = process.env.DASHBOARD_PASSWORD;
+  const username = getEnv('DASHBOARD_USERNAME');
+  const password = getEnv('DASHBOARD_PASSWORD');
 
   if (username && password) {
     return {

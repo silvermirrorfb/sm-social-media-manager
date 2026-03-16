@@ -63,6 +63,10 @@ src/
 3. Copy `.env.example` → `.env` and fill in credentials
 4. `npm run dev`
 
+Meta env note:
+- Preferred: `INSTAGRAM_APP_SECRET` and `INSTAGRAM_ACCOUNT`
+- Legacy fallback still supported: `META_APP_SECRET` and `INSTAGRAM_ACCOUNT_ID`
+
 ## 10 Locations
 
 NYC: Upper East Side, Flatiron, Bryant Park, Manhattan West, Upper West Side

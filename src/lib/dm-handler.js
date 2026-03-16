@@ -135,5 +135,15 @@ export async function handleDirectMessage(event) {
     console.log(`[DM] Replied to ${profile.username || senderId} (msg #${userMessageCount})`);
   } catch (err) {
     console.error('[DM] Handler error:', err);
+    await logToSheet({
+      type: 'DM',
+      timestamp: new Date().toISOString(),
+      username: senderId,
+      incomingMessage: messageText || '[non-text message]',
+      response: '',
+      action: 'error',
+      reason: err instanceof Error ? err.message : 'Unknown DM handler error',
+      needsReview: 'YES',
+    }).catch(() => {});
   }
 }

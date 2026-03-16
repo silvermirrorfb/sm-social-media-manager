@@ -2,27 +2,66 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { handleDirectMessage } from '@/lib/dm-handler';
 import { handleComment } from '@/lib/comment-handler';
+import { getEnv } from '@/lib/env';
 
-const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
-const APP_SECRET = process.env.META_APP_SECRET;
+const VERIFY_TOKEN = getEnv('META_VERIFY_TOKEN');
+const APP_SECRET = getEnv('INSTAGRAM_APP_SECRET', 'META_APP_SECRET');
 
-function isValidMetaSignature(rawBody, signatureHeader) {
-  if (!APP_SECRET) return true;
-  if (!signatureHeader) return false;
+function parseSignatureHeader(signatureHeader, expectedAlgo) {
+  if (!signatureHeader) return null;
 
   const [algo, providedSignature] = signatureHeader.split('=');
-  if (algo !== 'sha256' || !providedSignature) return false;
+  if (algo !== expectedAlgo || !providedSignature || !/^[a-f0-9]+$/i.test(providedSignature)) {
+    return null;
+  }
 
-  const expectedSignature = crypto
-    .createHmac('sha256', APP_SECRET)
-    .update(rawBody, 'utf8')
-    .digest('hex');
+  return Buffer.from(providedSignature, 'hex');
+}
 
-  const provided = Buffer.from(providedSignature, 'utf8');
-  const expected = Buffer.from(expectedSignature, 'utf8');
-  if (provided.length !== expected.length) return false;
+function isValidMetaSignature(rawBodyBuffer, headers) {
+  if (!APP_SECRET) {
+    return { valid: true, reason: 'app secret not configured' };
+  }
 
-  return crypto.timingSafeEqual(provided, expected);
+  const signatureCandidates = [
+    {
+      headerName: 'x-hub-signature-256',
+      algo: 'sha256',
+      provided: parseSignatureHeader(headers.get('x-hub-signature-256'), 'sha256'),
+    },
+    {
+      headerName: 'x-hub-signature',
+      algo: 'sha1',
+      provided: parseSignatureHeader(headers.get('x-hub-signature'), 'sha1'),
+    },
+  ];
+
+  for (const candidate of signatureCandidates) {
+    if (!candidate.provided) continue;
+
+    const expected = crypto
+      .createHmac(candidate.algo, APP_SECRET)
+      .update(rawBodyBuffer)
+      .digest();
+
+    if (
+      candidate.provided.length === expected.length &&
+      crypto.timingSafeEqual(candidate.provided, expected)
+    ) {
+      return {
+        valid: true,
+        matchedHeader: candidate.headerName,
+        algo: candidate.algo,
+      };
+    }
+  }
+
+  return {
+    valid: false,
+    reason: 'no valid signature header matched',
+    hasSha256Header: Boolean(headers.get('x-hub-signature-256')),
+    hasSha1Header: Boolean(headers.get('x-hub-signature')),
+  };
 }
 
 // ─── GET: Meta Webhook Verification ─────────────────────────
@@ -50,10 +89,17 @@ export async function GET(request) {
 //   - mentions
 export async function POST(request) {
   try {
-    const rawBody = await request.text();
-    const signatureHeader = request.headers.get('x-hub-signature-256');
-    if (!isValidMetaSignature(rawBody, signatureHeader)) {
-      console.warn('[Webhook] Signature validation failed');
+    const rawBodyBuffer = Buffer.from(await request.arrayBuffer());
+    const rawBody = rawBodyBuffer.toString('utf8');
+    const signatureResult = isValidMetaSignature(rawBodyBuffer, request.headers);
+
+    if (!signatureResult.valid) {
+      console.warn('[Webhook] Signature validation failed', {
+        reason: signatureResult.reason,
+        hasSha256Header: signatureResult.hasSha256Header,
+        hasSha1Header: signatureResult.hasSha1Header,
+        payloadBytes: rawBodyBuffer.length,
+      });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
     }
 
@@ -65,12 +111,15 @@ export async function POST(request) {
 
     if (eventType === 'instagram') {
       const tasks = [];
+      let dmEvents = 0;
+      let commentEvents = 0;
 
       // Process each entry (could be batched)
       for (const entry of body.entry || []) {
         // ── Direct Messages ──
         if (entry.messaging) {
           for (const event of entry.messaging) {
+            dmEvents++;
             tasks.push(
               handleDirectMessage(event).catch((err) =>
                 console.error('[Webhook] DM handler error:', err)
@@ -83,6 +132,7 @@ export async function POST(request) {
         if (entry.changes) {
           for (const change of entry.changes) {
             if (change.field === 'comments') {
+              commentEvents++;
               tasks.push(
                 handleComment(change.value).catch((err) =>
                   console.error('[Webhook] Comment handler error:', err)
@@ -92,6 +142,14 @@ export async function POST(request) {
           }
         }
       }
+
+      console.log('[Webhook] Accepted instagram payload', {
+        matchedHeader: signatureResult.matchedHeader,
+        algo: signatureResult.algo,
+        entries: Array.isArray(body.entry) ? body.entry.length : 0,
+        dmEvents,
+        commentEvents,
+      });
 
       Promise.allSettled(tasks).then((results) => {
         const failedCount = results.filter((result) => result.status === 'rejected').length;

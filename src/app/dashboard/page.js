@@ -2,6 +2,7 @@ import Link from 'next/link';
 import styles from './dashboard.module.css';
 import { getRecentLogRows } from '@/lib/sheets';
 import { logoutAction } from './login/actions';
+import { hasEnv } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ const PLATFORMS = [
     key: 'instagram',
     name: 'Instagram',
     status: 'live',
-    description: 'Live now. DMs and comment moderation are flowing through the production webhook.',
+    description: 'Configured in production. This lane becomes fully live once real DM and comment events are confirmed end to end.',
   },
   {
     key: 'facebook',
@@ -40,17 +41,17 @@ const VIEW_LABELS = {
 };
 
 function getEnvSnapshot() {
-  const hasMetaToken = !!process.env.INSTAGRAM_ACCESS_TOKEN;
-  const hasMetaSecret = !!process.env.META_APP_SECRET;
-  const hasVerifyToken = !!process.env.META_VERIFY_TOKEN;
-  const hasInstagramAccountId = !!process.env.INSTAGRAM_ACCOUNT_ID;
+  const hasMetaToken = hasEnv('INSTAGRAM_ACCESS_TOKEN');
+  const hasMetaSecret = hasEnv('INSTAGRAM_APP_SECRET', 'META_APP_SECRET');
+  const hasVerifyToken = hasEnv('META_VERIFY_TOKEN');
+  const hasInstagramAccountId = hasEnv('INSTAGRAM_ACCOUNT', 'INSTAGRAM_ACCOUNT_ID');
   const hasGoogleCreds =
-    !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
-    (!!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && !!process.env.GOOGLE_PRIVATE_KEY);
+    hasEnv('GOOGLE_SERVICE_ACCOUNT_JSON') ||
+    (hasEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL') && hasEnv('GOOGLE_PRIVATE_KEY'));
 
   return {
     hasGoogleCreds,
-    hasSheetId: !!process.env.GOOGLE_SHEET_ID,
+    hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
     metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
   };
 }
@@ -139,8 +140,8 @@ function getTakeoverStatus(platformKey, env, entries) {
 
   if (entries.length === 0) {
     return {
-      label: 'Ready to take over',
-      body: 'Instagram is configured and can answer as soon as real DMs or comments arrive. The next step is just confirming traffic shows up in this dashboard.',
+      label: 'Configured, validating live traffic',
+      body: 'Instagram is configured, but we should treat it as in validation until a real DM or comment is logged here and the bot response path is confirmed.',
     };
   }
 

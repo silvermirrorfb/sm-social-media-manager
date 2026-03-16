@@ -2,6 +2,7 @@ import { replyToComment, hideComment } from './instagram';
 import { classifyComment } from './claude';
 import { logToSheet } from './sheets';
 import { needsHumanReview, classifySeverity, PARTNER_WHITELIST, BLOCK_LIST } from './moderation-policy';
+import { getEnv } from './env';
 
 // ─── In-memory spam tracker ─────────────────────────────────
 // TODO: Move to Redis for durability in serverless
@@ -26,7 +27,7 @@ export async function handleComment(commentData) {
   const username = commentData.from?.username || 'unknown';
 
   // Skip our own replies
-  if (commentData.from?.id === process.env.INSTAGRAM_ACCOUNT_ID) return;
+  if (commentData.from?.id === getEnv('INSTAGRAM_ACCOUNT', 'INSTAGRAM_ACCOUNT_ID')) return;
 
   // Skip if on partner whitelist
   if (PARTNER_WHITELIST.includes(`@${username}`)) {

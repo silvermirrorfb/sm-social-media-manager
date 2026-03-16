@@ -2,8 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { MODERATION_CONFIG } from './moderation-policy';
+import { getEnv } from './env';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Anthropic({ apiKey: getEnv('ANTHROPIC_API_KEY') });
 
 const VALID_ACTIONS = new Set(['reply', 'hide', 'hide_and_flag', 'ignore', 'block']);
 const VALID_CATEGORIES = new Set([

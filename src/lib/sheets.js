@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { getEnv } from './env';
 
 let sheetsClient = null;
 const LOG_SHEET_NAME = 'Instagram Log';
@@ -10,17 +11,21 @@ function getSheetsClient() {
   // 1. GOOGLE_SERVICE_ACCOUNT_JSON (single JSON blob — same as cancel bot)
   // 2. Separate GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY
   let credentials;
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  const serviceAccountJson = getEnv('GOOGLE_SERVICE_ACCOUNT_JSON');
+  const serviceAccountEmail = getEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+  const privateKey = getEnv('GOOGLE_PRIVATE_KEY');
+
+  if (serviceAccountJson) {
     try {
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      credentials = JSON.parse(serviceAccountJson);
     } catch (err) {
       console.error('[Sheets] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', err.message);
       return null;
     }
-  } else if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+  } else if (serviceAccountEmail && privateKey) {
     credentials = {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      client_email: serviceAccountEmail,
+      private_key: privateKey.replace(/\\n/g, '\n'),
     };
   } else {
     console.warn('[Sheets] No Google credentials configured');
@@ -40,7 +45,7 @@ function getSheetsClient() {
 // Columns: Timestamp | Type | Username | Incoming Message | Response | Action |
 //          Category | Reason | Confidence | Severity | Triggers | Needs Review
 export async function logToSheet(data) {
-  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const sheetId = getEnv('GOOGLE_SHEET_ID');
   if (!sheetId) {
     console.warn('[Sheets] No GOOGLE_SHEET_ID configured — skipping log');
     return;
@@ -78,7 +83,7 @@ export async function logToSheet(data) {
 
 // ─── Initialize sheet headers if empty ──────────────────────
 export async function initSheetHeaders() {
-  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const sheetId = getEnv('GOOGLE_SHEET_ID');
   if (!sheetId) return;
 
   const sheets = getSheetsClient();
@@ -111,7 +116,7 @@ export async function initSheetHeaders() {
 }
 
 export async function getRecentLogRows(limit = 150) {
-  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const sheetId = getEnv('GOOGLE_SHEET_ID');
   if (!sheetId) return [];
 
   const sheets = getSheetsClient();
