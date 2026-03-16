@@ -105,8 +105,9 @@ export async function POST(request) {
 
     const body = JSON.parse(rawBody || '{}');
 
-    // Meta requires a 200 response within 20 seconds or it retries
-    // We process asynchronously and respond immediately
+    // Meta requires a 200 response within 20 seconds or it retries.
+    // On Vercel, background work after returning is not reliable, so we
+    // finish reply/moderation tasks before acknowledging the webhook.
     const eventType = body.object;
 
     if (eventType === 'instagram') {
@@ -151,15 +152,26 @@ export async function POST(request) {
         commentEvents,
       });
 
-      Promise.allSettled(tasks).then((results) => {
+      if (tasks.length > 0) {
+        const startedAt = Date.now();
+        const results = await Promise.allSettled(tasks);
         const failedCount = results.filter((result) => result.status === 'rejected').length;
+
+        console.log('[Webhook] Completed instagram payload', {
+          taskCount: tasks.length,
+          failedCount,
+          durationMs: Date.now() - startedAt,
+        });
+
         if (failedCount > 0) {
-          console.warn(`[Webhook] ${failedCount} background tasks failed`);
+          console.warn(`[Webhook] ${failedCount} webhook tasks failed`);
         }
-      });
+      } else {
+        console.log('[Webhook] No actionable instagram tasks found');
+      }
     }
 
-    // Always return 200 quickly to acknowledge receipt
+    // Return 200 after handling the payload so Meta does not retry.
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     console.error('[Webhook] Parse error:', err);
