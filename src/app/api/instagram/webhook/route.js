@@ -4,10 +4,9 @@ import { handleDirectMessage } from '@/lib/dm-handler';
 import { handleComment } from '@/lib/comment-handler';
 import { handleMessengerMessage } from '@/lib/fb-dm-handler';
 import { handleFacebookComment } from '@/lib/fb-comment-handler';
-import { getEnv } from '@/lib/env';
+import { getEnv, getMetaAppSecrets } from '@/lib/env';
 
 const VERIFY_TOKEN = getEnv('META_VERIFY_TOKEN');
-const APP_SECRET = getEnv('INSTAGRAM_APP_SECRET', 'META_APP_SECRET');
 
 function parseSignatureHeader(signatureHeader, expectedAlgo) {
   if (!signatureHeader) return null;
@@ -21,7 +20,8 @@ function parseSignatureHeader(signatureHeader, expectedAlgo) {
 }
 
 function isValidMetaSignature(rawBodyBuffer, headers) {
-  if (!APP_SECRET) {
+  const appSecrets = getMetaAppSecrets();
+  if (appSecrets.length === 0) {
     return { valid: true, reason: 'app secret not configured' };
   }
 
@@ -38,23 +38,30 @@ function isValidMetaSignature(rawBodyBuffer, headers) {
     },
   ];
 
-  for (const candidate of signatureCandidates) {
-    if (!candidate.provided) continue;
+  for (const secret of appSecrets) {
+    for (const candidate of signatureCandidates) {
+      if (!candidate.provided) continue;
 
-    const expected = crypto
-      .createHmac(candidate.algo, APP_SECRET)
-      .update(rawBodyBuffer)
-      .digest();
+      const expected = crypto
+        .createHmac(candidate.algo, secret)
+        .update(rawBodyBuffer)
+        .digest();
 
-    if (
-      candidate.provided.length === expected.length &&
-      crypto.timingSafeEqual(candidate.provided, expected)
-    ) {
-      return {
-        valid: true,
-        matchedHeader: candidate.headerName,
-        algo: candidate.algo,
-      };
+      if (
+        candidate.provided.length === expected.length &&
+        crypto.timingSafeEqual(candidate.provided, expected)
+      ) {
+        return {
+          valid: true,
+          matchedHeader: candidate.headerName,
+          algo: candidate.algo,
+          secretSource: secret === getEnv('FACEBOOK_APP_SECRET')
+            ? 'FACEBOOK_APP_SECRET'
+            : secret === getEnv('INSTAGRAM_APP_SECRET')
+              ? 'INSTAGRAM_APP_SECRET'
+              : 'META_APP_SECRET',
+        };
+      }
     }
   }
 
@@ -101,6 +108,7 @@ export async function POST(request) {
         hasSha256Header: signatureResult.hasSha256Header,
         hasSha1Header: signatureResult.hasSha1Header,
         payloadBytes: rawBodyBuffer.length,
+        configuredSecretCount: getMetaAppSecrets().length,
       });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
     }
@@ -149,6 +157,7 @@ export async function POST(request) {
       console.log('[Webhook] Accepted instagram payload', {
         matchedHeader: signatureResult.matchedHeader,
         algo: signatureResult.algo,
+        secretSource: signatureResult.secretSource,
         entries: Array.isArray(body.entry) ? body.entry.length : 0,
         dmEvents,
         commentEvents,
@@ -207,6 +216,7 @@ export async function POST(request) {
       console.log('[Webhook] Accepted page payload', {
         matchedHeader: signatureResult.matchedHeader,
         algo: signatureResult.algo,
+        secretSource: signatureResult.secretSource,
         entries: Array.isArray(body.entry) ? body.entry.length : 0,
         messengerEvents,
         commentEvents,

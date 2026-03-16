@@ -8,6 +8,7 @@ export async function GET() {
 
   const hasMetaToken = hasEnv('INSTAGRAM_ACCESS_TOKEN');
   const hasMetaSecret = hasEnv('INSTAGRAM_APP_SECRET', 'META_APP_SECRET');
+  const hasFacebookAppSecret = hasEnv('FACEBOOK_APP_SECRET');
   const hasVerifyToken = hasEnv('META_VERIFY_TOKEN');
   const hasInstagramAccountId = Boolean(getInstagramAccountId());
 
@@ -23,6 +24,7 @@ export async function GET() {
       hasAnthropicKey: hasEnv('ANTHROPIC_API_KEY'),
       hasMetaToken,
       hasMetaSecret,
+      hasFacebookAppSecret,
       hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
       hasGoogleCreds,
       hasVerifyToken,

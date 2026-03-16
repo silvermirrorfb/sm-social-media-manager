@@ -38,3 +38,13 @@ export function getInstagramAccountId() {
 
   return '';
 }
+
+export function getMetaAppSecrets() {
+  const secrets = [
+    getEnv('FACEBOOK_APP_SECRET'),
+    getEnv('INSTAGRAM_APP_SECRET'),
+    getEnv('META_APP_SECRET'),
+  ].filter(Boolean);
+
+  return Array.from(new Set(secrets));
+}

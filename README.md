@@ -65,6 +65,7 @@ src/
 
 Meta env note:
 - Preferred: `INSTAGRAM_APP_SECRET` and `INSTAGRAM_ACCOUNT`
+- If Facebook is connected through a different Meta app, also set `FACEBOOK_APP_SECRET`
 - Legacy fallback still supported: `META_APP_SECRET` and `INSTAGRAM_ACCOUNT_ID`
 - The account value must be the numeric Instagram account ID, not the `@username`
 
