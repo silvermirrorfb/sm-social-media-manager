@@ -8,6 +8,30 @@ const conversations = new Map();
 const CONVERSATION_TTL = 30 * 60 * 1000; // 30 minutes
 const ESCALATION_THRESHOLD = 4; // After 4 user messages, offer human handoff
 
+function describeNonTextEvent(event) {
+  if (!event.message) {
+    if (event.read) return '[read receipt]';
+    if (event.delivery) return '[delivery receipt]';
+    if (event.postback) return '[postback]';
+    if (event.reaction) return `[reaction:${event.reaction.reaction || 'unknown'}]`;
+    return '[non-message event]';
+  }
+
+  const attachmentTypes = Array.isArray(event.message.attachments)
+    ? event.message.attachments.map((attachment) => attachment.type).filter(Boolean)
+    : [];
+
+  if (attachmentTypes.length > 0) {
+    return `[attachments:${attachmentTypes.join(',')}]`;
+  }
+
+  if (event.message.quick_reply?.payload) {
+    return `[quick-reply:${event.message.quick_reply.payload}]`;
+  }
+
+  return '[message without text]';
+}
+
 function getConversation(senderId) {
   const convo = conversations.get(senderId);
   if (!convo) return { messages: [], userMessageCount: 0, hasEscalated: false };
@@ -41,6 +65,8 @@ export async function handleDirectMessage(event) {
 
   // Handle non-text messages
   if (!messageText) {
+    const eventLabel = describeNonTextEvent(event);
+
     // Voice message
     if (event.message?.attachments?.some(a => a.type === 'audio')) {
       await sendDirectMessage(senderId,
@@ -73,7 +99,22 @@ export async function handleDirectMessage(event) {
       return;
     }
 
-    console.log('[DM] Skipping unsupported message type from', senderId);
+    if (!event.message) {
+      console.log(`[DM] Ignoring ${eventLabel} from ${senderId}`);
+      return;
+    }
+
+    await logToSheet({
+      type: 'DM',
+      timestamp: new Date().toISOString(),
+      username: senderId,
+      incomingMessage: eventLabel,
+      response: '',
+      action: 'ignored',
+      reason: 'Unsupported non-text DM payload',
+    }).catch(() => {});
+
+    console.log(`[DM] Skipping unsupported message type ${eventLabel} from ${senderId}`);
     return;
   }
 

@@ -3,6 +3,15 @@ import { getEnv } from './env';
 
 let sheetsClient = null;
 const LOG_SHEET_NAME = 'Instagram Log';
+let logSheetReady = false;
+
+function getSheetHeaders() {
+  return [[
+    'Timestamp', 'Type', 'Username', 'Incoming Message', 'Response',
+    'Action', 'Category', 'Reason', 'Confidence', 'Severity',
+    'Triggers', 'Needs Review',
+  ]];
+}
 
 function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
@@ -54,6 +63,8 @@ export async function logToSheet(data) {
   const sheets = getSheetsClient();
   if (!sheets) return;
 
+  await ensureLogSheetReady(sheets, sheetId);
+
   const row = [
     data.timestamp || new Date().toISOString(),
     data.type || '',
@@ -89,6 +100,12 @@ export async function initSheetHeaders() {
   const sheets = getSheetsClient();
   if (!sheets) return;
 
+  await ensureLogSheetReady(sheets, sheetId);
+}
+
+async function ensureLogSheetReady(sheets, sheetId) {
+  if (logSheetReady) return;
+
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
@@ -101,17 +118,46 @@ export async function initSheetHeaders() {
         range: `${LOG_SHEET_NAME}!A1:L1`,
         valueInputOption: 'RAW',
         requestBody: {
-          values: [[
-            'Timestamp', 'Type', 'Username', 'Incoming Message', 'Response',
-            'Action', 'Category', 'Reason', 'Confidence', 'Severity',
-            'Triggers', 'Needs Review',
-          ]],
+          values: getSheetHeaders(),
         },
       });
       console.log('[Sheets] Headers initialized');
     }
+    logSheetReady = true;
   } catch (err) {
-    console.error('[Sheets] Init headers failed:', err.message);
+    if (!String(err.message || '').includes('Unable to parse range')) {
+      console.error('[Sheets] Init headers failed:', err.message);
+      return;
+    }
+
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: LOG_SHEET_NAME,
+              },
+            },
+          }],
+        },
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `${LOG_SHEET_NAME}!A1:L1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: getSheetHeaders(),
+        },
+      });
+
+      logSheetReady = true;
+      console.log('[Sheets] Created log sheet and initialized headers');
+    } catch (createErr) {
+      console.error('[Sheets] Failed to create log sheet:', createErr.message);
+    }
   }
 }
 
