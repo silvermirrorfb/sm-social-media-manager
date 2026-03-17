@@ -28,11 +28,13 @@ export async function loginAction(formData) {
   }
 
   const sessionValue = await createDashboardSessionValue();
-  cookies().set(getDashboardCookieName(), sessionValue, getDashboardCookieOptions());
+  const cookieStore = await cookies();
+  cookieStore.set(getDashboardCookieName(), sessionValue, getDashboardCookieOptions());
   redirect(nextPath);
 }
 
 export async function logoutAction() {
-  cookies().delete(getDashboardCookieName());
+  const cookieStore = await cookies();
+  cookieStore.delete(getDashboardCookieName());
   redirect('/dashboard/login');
 }

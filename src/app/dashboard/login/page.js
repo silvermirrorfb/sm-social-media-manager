@@ -17,14 +17,16 @@ function sanitizeNextPath(value) {
 }
 
 export default async function DashboardLoginPage({ searchParams }) {
-  const nextPath = sanitizeNextPath(searchParams?.next || '/dashboard');
-  const sessionValue = cookies().get(getDashboardCookieName())?.value;
+  const resolvedSearchParams = await searchParams;
+  const nextPath = sanitizeNextPath(resolvedSearchParams?.next || '/dashboard');
+  const cookieStore = await cookies();
+  const sessionValue = cookieStore.get(getDashboardCookieName())?.value;
 
   if (await hasValidDashboardSession(sessionValue)) {
     redirect(nextPath);
   }
 
-  const error = searchParams?.error === 'invalid'
+  const error = resolvedSearchParams?.error === 'invalid'
     ? 'That login did not match the dashboard credentials.'
     : '';
 

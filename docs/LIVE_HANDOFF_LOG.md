@@ -1,5 +1,30 @@
 # Live Handoff Log
 
+## 2026-03-17 10:45 ET
+
+### Completed
+- Upgraded framework stack to the patched supported line:
+  - `next@15.5.10`
+  - `react@19.2.4`
+  - `react-dom@19.2.4`
+  - `eslint-config-next@15.5.10`
+- Updated server-side request APIs for Next 15 compatibility:
+  - async `cookies()` usage in dashboard pages and login actions
+  - async `searchParams` handling in dashboard, login, and TikTok connect pages
+- Replaced deprecated `next lint` script with direct ESLint CLI usage.
+
+### Security Notes
+- Re-ran `npm audit --omit=dev` before the upgrade:
+  - `next` advisories included the self-hosted image optimizer issue and the React Server Components request deserialization DoS issue
+  - this app does **not** use `next/image` or `remotePatterns`, so the image optimizer advisory was not the main exposure
+  - the App Router / RSC advisory still applied because the app uses the App Router on a Next 14 line that no longer receives fixes
+- Upgrading to the patched Next 15 line cleared the audit without forcing a jump to Next 16.
+
+### QA
+- `npm audit --omit=dev` now reports `0 vulnerabilities`.
+- `npm run lint` passed with the new ESLint CLI script.
+- `npm run build` passed on Next 15.5.10 with all routes compiling successfully.
+
 ## 2026-03-17 08:45 ET
 
 ### Completed

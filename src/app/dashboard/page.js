@@ -614,30 +614,32 @@ function getSeverityClass(severity) {
 }
 
 export default async function DashboardPage({ searchParams }) {
-  const sessionValue = cookies().get(getDashboardCookieName())?.value;
+  const cookieStore = await cookies();
+  const sessionValue = cookieStore.get(getDashboardCookieName())?.value;
   if (!(await hasValidDashboardSession(sessionValue))) {
     redirect('/dashboard/login?next=%2Fdashboard');
   }
+  const resolvedSearchParams = await searchParams;
 
   const env = getEnvSnapshot();
 
   const rawRows = await getRecentLogRows(250);
   const entries = rawRows.map(normalizeLogRow);
   const PLATFORMS = getPlatforms(env, entries);
-  const selectedPlatform = PLATFORMS.some((platform) => platform.key === searchParams?.platform)
-    ? searchParams.platform
+  const selectedPlatform = PLATFORMS.some((platform) => platform.key === resolvedSearchParams?.platform)
+    ? resolvedSearchParams.platform
     : 'instagram';
-  const selectedChannel = CHANNEL_LABELS[searchParams?.channel] ? searchParams.channel : 'all';
-  const selectedView = VIEW_LABELS[searchParams?.view] ? searchParams.view : 'all';
-  const selectedRange = RANGE_LABELS[searchParams?.range] ? searchParams.range : 'all';
-  const search = typeof searchParams?.q === 'string' ? searchParams.q.trim() : '';
-  const selectedThreadKey = typeof searchParams?.thread === 'string' ? searchParams.thread : '';
+  const selectedChannel = CHANNEL_LABELS[resolvedSearchParams?.channel] ? resolvedSearchParams.channel : 'all';
+  const selectedView = VIEW_LABELS[resolvedSearchParams?.view] ? resolvedSearchParams.view : 'all';
+  const selectedRange = RANGE_LABELS[resolvedSearchParams?.range] ? resolvedSearchParams.range : 'all';
+  const search = typeof resolvedSearchParams?.q === 'string' ? resolvedSearchParams.q.trim() : '';
+  const selectedThreadKey = typeof resolvedSearchParams?.thread === 'string' ? resolvedSearchParams.thread : '';
 
   const platformAllEntries = entries.filter((entry) => entry.platform === selectedPlatform);
   const platformEntries = platformAllEntries.filter((entry) => matchesRange(entry, selectedRange));
   const campaignFilters = getCampaignFilters(platformEntries);
-  const selectedCampaign = campaignFilters.some((campaign) => campaign.name === searchParams?.campaign)
-    ? searchParams.campaign
+  const selectedCampaign = campaignFilters.some((campaign) => campaign.name === resolvedSearchParams?.campaign)
+    ? resolvedSearchParams.campaign
     : 'all';
   const channelEntries =
     selectedChannel === 'all'

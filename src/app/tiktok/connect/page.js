@@ -135,12 +135,13 @@ export default async function TikTokConnectPage({ searchParams }) {
   const redirectUri = getTikTokRedirectUri();
   const webhookUri = getTikTokWebhookUri();
   const scopes = getTikTokScopes();
-  const cookieStore = cookies();
+  const resolvedSearchParams = await searchParams;
+  const cookieStore = await cookies();
   const session = readTikTokSessionFromCookieStore(cookieStore);
   const liveData = await getTikTokLiveData(session);
 
-  const connectedParam = searchParams?.connected === '1';
-  const disconnectedParam = searchParams?.disconnected === '1';
+  const connectedParam = resolvedSearchParams?.connected === '1';
+  const disconnectedParam = resolvedSearchParams?.disconnected === '1';
 
   return (
     <main style={pageStyle}>
