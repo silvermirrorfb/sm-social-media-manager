@@ -28,3 +28,28 @@
 ### Next
 - Finalize TikTok connection state persistence and status endpoint.
 - Continue expanding dashboard operational visibility for TikTok events.
+
+## 2026-03-16 22:18 ET
+
+### Completed
+- Added encrypted TikTok OAuth session support:
+  - `/src/lib/tiktok-session.js`
+- Upgraded TikTok connect operations page:
+  - `/tiktok/connect`
+  - now shows portal values, connection status, profile snapshot, and recent videos
+- Added TikTok OAuth operational routes:
+  - `/api/tiktok/oauth/status`
+  - `/api/tiktok/oauth/disconnect`
+- Enhanced OAuth event logging into Google Sheets:
+  - start, success, failure, disconnect
+- Expanded dashboard readiness to include TikTok OAuth configuration and system-channel visibility.
+- Added health signal:
+  - `hasTikTokSessionCrypto`
+
+### Deploy
+- Pushed to `main`:
+  - `725d5a2` Expand TikTok ops flow with session status and dashboard readiness
+
+### Open Items
+- `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` are not visible in current Vercel env list yet.
+- Without those, TikTok OAuth cannot complete in production even though webhook callback testing is working.
