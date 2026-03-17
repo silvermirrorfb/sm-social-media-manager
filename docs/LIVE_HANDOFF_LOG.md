@@ -376,3 +376,24 @@
 
 ### Notes
 - This port intentionally keeps TikTok queue APIs under `/dashboard/api/...` so the existing dashboard session cookie continues to protect them.
+
+## 2026-03-17 16:45 EDT
+
+### Completed
+- Added the first live TikTok content bridge on top of the queue flow:
+  - signed bookmarklet capture route at `/dashboard/tiktok/capture`
+  - queue item creation from TikTok page context
+  - bookmarklet install/copy UI inside `/dashboard/tiktok`
+- Added dashboard-auth bridge token helpers so bookmarklet capture can work without exposing the session cookie cross-site:
+  - `/src/lib/dashboard-auth.js`
+- Updated TikTok docs to reflect the bookmarklet capture workflow:
+  - `/README.md`
+  - `/docs/TIKTOK_SOCIAL_COORDINATOR_GUIDE.md`
+
+### QA
+- `npm run lint` passed
+- `npm run build` passed
+
+### Notes
+- This is the first bridge layer, not the final extension.
+- It is intentionally human-in-the-loop: the bookmarklet captures context into the queue, and the operator still completes the final action manually inside TikTok.

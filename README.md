@@ -16,6 +16,7 @@ AI-powered social inbox and moderation system for Silver Mirror Facial Bar.
 - `/dashboard` operations dashboard
 - `/dashboard/outreach` bulk outreach CRM (CSV import, AI drafting, selective live send)
 - `/dashboard/tiktok` TikTok ops console (queue, draft generation, operator workflow)
+- `/dashboard/tiktok/capture` signed TikTok bookmarklet capture bridge
 - `/dashboard/api/outreach/generate` outreach draft generation endpoint
 - `/dashboard/api/outreach/followup` outreach follow-up draft generation endpoint
 - `/dashboard/api/outreach/send` outreach send endpoint
@@ -75,6 +76,7 @@ See `.env.example` for the complete list. Key groups:
 - Human-in-the-loop queue for inbound DMs, influencer outreach, and negative comment review
 - Queue data stored in Google Sheets
 - AI-assisted draft generation for saved TikTok tasks
+- Signed bookmarklet capture bridge for pulling TikTok page context back into the queue
 - Manual TikTok login and final action still stay with the operator
 - Browser extension/content bridge is the next planned automation step
 

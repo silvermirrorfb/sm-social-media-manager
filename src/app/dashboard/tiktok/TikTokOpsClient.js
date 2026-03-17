@@ -56,7 +56,41 @@ function hoursSince(value) {
   return (Date.now() - parsed) / (60 * 60 * 1000);
 }
 
-export default function TikTokOpsClient() {
+function toBookmarklet(origin, token) {
+  if (!origin || !token) return '';
+
+  const js = `
+    (function(){
+      try {
+        var selection = window.getSelection ? String(window.getSelection()).trim() : '';
+        var path = location.pathname.split('/').filter(Boolean);
+        var inferredHandle = path[0] && ['inbox','messages','video'].indexOf(path[0].toLowerCase()) === -1 ? path[0].replace(/^@/,'') : '';
+        var defaultWorkflow = /inbox|messages/i.test(location.pathname + ' ' + document.title) ? 'inbound_dm' : (selection ? 'comment_review' : 'influencer_dm');
+        var workflow = prompt('Workflow: inbound_dm, influencer_dm, comment_review', defaultWorkflow) || defaultWorkflow;
+        var message = selection || prompt('Paste the TikTok DM, comment, or creator context to capture', '') || '';
+        if (!message.trim()) {
+          alert('No TikTok text selected or pasted.');
+          return;
+        }
+        var captureUrl = new URL(${JSON.stringify('/dashboard/tiktok/capture')}, ${JSON.stringify(origin)});
+        captureUrl.searchParams.set('token', ${JSON.stringify(token)});
+        captureUrl.searchParams.set('workflow', workflow);
+        captureUrl.searchParams.set('message', message.slice(0, 3500));
+        captureUrl.searchParams.set('actionUrl', location.href);
+        captureUrl.searchParams.set('title', document.title);
+        captureUrl.searchParams.set('handle', inferredHandle);
+        captureUrl.searchParams.set('source', 'bookmarklet');
+        window.open(captureUrl.toString(), '_blank', 'noopener,noreferrer');
+      } catch (err) {
+        alert('TikTok capture failed: ' + err.message);
+      }
+    })();
+  `.replace(/\s+/g, ' ').trim();
+
+  return `javascript:${js}`;
+}
+
+export default function TikTokOpsClient({ bridgeToken = '', flash = null }) {
   const [health, setHealth] = useState(null);
   const [queue, setQueue] = useState({
     ready: false,
@@ -72,6 +106,12 @@ export default function TikTokOpsClient() {
   const [draftingTaskId, setDraftingTaskId] = useState('');
   const [error, setError] = useState('');
   const [sessionAckAt, setSessionAckAt] = useState('');
+  const [origin, setOrigin] = useState('');
+  const [bridgeCopied, setBridgeCopied] = useState(false);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   async function refreshDashboard() {
     setError('');
@@ -210,6 +250,18 @@ export default function TikTokOpsClient() {
   };
 
   const env = health?.env || {};
+  const bookmarkletHref = toBookmarklet(origin, bridgeToken);
+
+  async function copyBookmarklet() {
+    if (!bookmarkletHref) return;
+    try {
+      await navigator.clipboard.writeText(bookmarkletHref);
+      setBridgeCopied(true);
+      window.setTimeout(() => setBridgeCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy bookmarklet:', err);
+    }
+  }
 
   return (
     <main style={styles.page}>
@@ -262,6 +314,14 @@ export default function TikTokOpsClient() {
       )}
 
       {error ? <section style={styles.errorCard}>{error}</section> : null}
+      {flash ? (
+        <section style={flash.type === 'success' ? styles.successCard : styles.errorCard}>
+          <div>
+            <div style={styles.cardTitle}>{flash.type === 'success' ? 'Capture complete' : 'Capture issue'}</div>
+            <p style={styles.cardText}>{flash.message}</p>
+          </div>
+        </section>
+      ) : null}
 
       <section style={styles.grid}>
         <StatusCard
@@ -292,6 +352,43 @@ export default function TikTokOpsClient() {
             'Browser extension or local agent can attach later.',
           ]}
         />
+      </section>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <div>
+            <h2 style={styles.panelTitle}>TikTok Capture Bridge</h2>
+            <p style={styles.panelSubtitle}>
+              This is the first live content bridge. Install the bookmarklet, open TikTok in the same browser,
+              select text or stay on the relevant page, and send that context straight into this queue.
+            </p>
+          </div>
+        </div>
+        <div style={styles.captureGrid}>
+          <div style={styles.captureCard}>
+            <strong style={styles.captureTitle}>1. Install bookmarklet</strong>
+            <p style={styles.cardText}>
+              Drag this button to your bookmarks bar, or copy the script and save it as a bookmark URL.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <a href={bookmarkletHref || '#'} style={styles.primaryLink}>
+                Save TikTok Capture
+              </a>
+              <button type="button" onClick={copyBookmarklet} style={styles.secondaryButton}>
+                {bridgeCopied ? 'Copied' : 'Copy bookmarklet code'}
+              </button>
+            </div>
+          </div>
+          <div style={styles.captureCard}>
+            <strong style={styles.captureTitle}>2. Use it on TikTok</strong>
+            <ol style={styles.captureList}>
+              <li>Select a DM or comment if you want exact text captured.</li>
+              <li>Click the bookmarklet while you are on TikTok.</li>
+              <li>Choose the workflow when prompted.</li>
+              <li>The queue item will open back here with the page URL and context saved.</li>
+            </ol>
+          </div>
+        </div>
       </section>
 
       <section style={styles.panel}>
@@ -827,6 +924,28 @@ const styles = {
     color: '#6c6156',
     lineHeight: 1.5,
   },
+  captureGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: '1rem',
+  },
+  captureCard: {
+    borderRadius: '18px',
+    border: '1px solid #e6d7c4',
+    background: '#fffcf7',
+    padding: '1rem',
+  },
+  captureTitle: {
+    display: 'block',
+    fontSize: '1rem',
+    marginBottom: '0.45rem',
+  },
+  captureList: {
+    margin: '0.5rem 0 0',
+    paddingLeft: '1.15rem',
+    color: '#584d40',
+    lineHeight: 1.6,
+  },
   countBadge: {
     minWidth: '44px',
     height: '44px',
@@ -900,6 +1019,20 @@ const styles = {
     padding: '0.78rem 1.15rem',
     fontSize: '0.92rem',
     cursor: 'pointer',
+  },
+  primaryLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    borderRadius: '999px',
+    background: '#1f1f1a',
+    color: '#f9f4ed',
+    padding: '0.85rem 1.25rem',
+    fontSize: '0.95rem',
+    cursor: 'grab',
+    textDecoration: 'none',
+    fontWeight: 600,
   },
   workflowStack: {
     maxWidth: '1180px',

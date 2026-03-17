@@ -13,6 +13,7 @@ The dashboard helps you manage three kinds of TikTok work:
 The dashboard is a planning and tracking tool. It does not complete the final TikTok action for you yet. You will still do the final reply, outreach message, or comment action manually inside TikTok.
 
 The dashboard can now generate a draft suggestion for a saved task. You still review the draft and complete the final action manually in TikTok.
+The dashboard also includes a capture bookmarklet so you can send TikTok page context into the queue quickly.
 
 ## Before you start
 
@@ -23,6 +24,7 @@ At the start of your shift:
 3. Log into TikTok manually.
 4. Go back to the dashboard.
 5. Click the button confirming that you are logged into TikTok.
+6. Install the `Save TikTok Capture` bookmarklet from the TikTok Ops Console if it is not already in your bookmarks bar.
 
 If the dashboard shows a TikTok login reminder, do not work the queue until you have logged into TikTok.
 
@@ -31,6 +33,7 @@ If the dashboard shows a TikTok login reminder, do not work the queue until you 
 The dashboard has:
 
 - a TikTok login reminder
+- a TikTok capture bridge bookmarklet
 - queue status and environment status cards
 - an "Add task" form
 - three work lanes:
@@ -158,6 +161,24 @@ Use `Operator note` for short, practical context such as:
 - why the task was blocked
 
 Keep notes clear and short so the next person can continue quickly.
+
+## How to use the TikTok capture bridge
+
+Use the bookmarklet when you are already on TikTok and want to pull the current page context into the queue quickly.
+
+1. Open `/dashboard/tiktok`.
+2. Drag `Save TikTok Capture` into your bookmarks bar, or copy the bookmarklet code into a bookmark manually.
+3. Go to TikTok in the same browser.
+4. Highlight a DM or comment if you want the exact text captured.
+5. Click the bookmarklet.
+6. Choose the workflow when prompted.
+7. The dashboard will open a new tab and create a queue item with the selected text, page URL, and page title.
+
+Use this for:
+
+- inbound DM capture
+- comment review capture
+- quick creator-profile intake for outreach
 
 ## End of shift checklist
 

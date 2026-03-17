@@ -1,6 +1,10 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboard-auth';
+import {
+  createDashboardBridgeToken,
+  getDashboardCookieName,
+  hasValidDashboardSession,
+} from '@/lib/dashboard-auth';
 import TikTokOpsClient from './TikTokOpsClient';
 
 export const dynamic = 'force-dynamic';
@@ -10,13 +14,28 @@ export const metadata = {
   description: 'Human-in-the-loop TikTok operations queue for Silver Mirror.',
 };
 
-export default async function TikTokOpsPage() {
+export default async function TikTokOpsPage({ searchParams }) {
   const cookieStore = await cookies();
   const sessionValue = cookieStore.get(getDashboardCookieName())?.value;
+  const resolvedSearchParams = await searchParams;
 
   if (!(await hasValidDashboardSession(sessionValue))) {
     redirect('/dashboard/login?next=/dashboard/tiktok');
   }
 
-  return <TikTokOpsClient />;
+  const bridgeToken = await createDashboardBridgeToken({ purpose: 'tiktok_capture' });
+  const flash =
+    resolvedSearchParams?.captured === '1'
+      ? {
+          type: 'success',
+          message: `Captured TikTok context into the queue${resolvedSearchParams?.handle ? ` for @${resolvedSearchParams.handle}` : ''}.`,
+        }
+      : resolvedSearchParams?.capture_error
+        ? {
+            type: 'error',
+            message: `TikTok capture failed: ${resolvedSearchParams.capture_error}.`,
+          }
+        : null;
+
+  return <TikTokOpsClient bridgeToken={bridgeToken} flash={flash} />;
 }
