@@ -53,3 +53,24 @@
 ### Open Items
 - `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` are not visible in current Vercel env list yet.
 - Without those, TikTok OAuth cannot complete in production even though webhook callback testing is working.
+
+## 2026-03-16 22:33 ET
+
+### Completed
+- Added Outreach CRM workspace:
+  - `/dashboard/outreach`
+- Added secure dashboard-scoped outreach API routes:
+  - `/dashboard/api/outreach/generate`
+  - `/dashboard/api/outreach/send`
+- Outreach supports:
+  - paste/import CSV contacts
+  - AI-personalized bulk draft generation from one base pitch
+  - selective live sending for Instagram/Facebook rows with recipient IDs
+  - draft copy/export CSV workflow for manual send paths
+- Added Claude outreach generator:
+  - `generateOutreachMessage(...)` in `/src/lib/claude.js`
+- Added dashboard navigation entry to Outreach CRM.
+
+### Notes
+- TikTok remains draft/export-only for outbound in this app until an approved direct send path is implemented.
+- Outreach events log into Sheets under `*_OUTREACH` types for traceability.

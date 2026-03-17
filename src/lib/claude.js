@@ -151,6 +151,78 @@ export async function generateDMResponse(userMessage, conversationHistory = []) 
   return text;
 }
 
+function fallbackOutreachMessage(basePitch, contact = {}) {
+  const firstName = contact.firstName || contact.name?.split(' ')[0] || '';
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+  const pitch = String(basePitch || '').trim();
+  return `${greeting}\n\n${pitch}\n\nIf this sounds interesting, I would love to share more details.`;
+}
+
+export async function generateOutreachMessage({ basePitch, contact = {}, campaignName = '' }) {
+  if (!basePitch || !String(basePitch).trim()) {
+    return '';
+  }
+
+  const noApiKey = !getEnv('ANTHROPIC_API_KEY');
+  if (noApiKey) {
+    return fallbackOutreachMessage(basePitch, contact);
+  }
+
+  const name = contact.name || '';
+  const firstName = contact.firstName || '';
+  const username = contact.username || '';
+  const notes = contact.notes || '';
+  const platform = contact.platform || 'instagram';
+
+  const prompt = `You are writing short, premium, human-sounding influencer outreach DMs for Silver Mirror Facial Bar.
+
+Campaign name: ${campaignName || 'General Outreach'}
+Platform: ${platform}
+
+Base pitch:
+"""${String(basePitch).trim()}"""
+
+Contact context:
+- Name: ${name || 'unknown'}
+- First name: ${firstName || 'unknown'}
+- Username: ${username || 'unknown'}
+- Notes: ${notes || 'none'}
+
+Instructions:
+- Keep the message under 450 characters.
+- Keep tone warm, confident, premium, and personal.
+- Open with first name when available.
+- Do not sound robotic, mass-mailed, or overly salesy.
+- Do not use hashtags.
+- Do not include more than one emoji.
+- Include a soft CTA at the end.
+- Return ONLY the final message text.`;
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 250,
+      temperature: 0.45,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim();
+
+    if (!text) {
+      return fallbackOutreachMessage(basePitch, contact);
+    }
+
+    return text.slice(0, 900);
+  } catch (error) {
+    console.error('[Claude] Outreach generation failed:', error?.message || error);
+    return fallbackOutreachMessage(basePitch, contact);
+  }
+}
+
 // ─── Classify a comment ─────────────────────────────────────
 // Returns: { category, confidence, action, replyText, triggers, severity, reason }
 export async function classifyComment(commentText, username, followerCount = null) {

@@ -514,6 +514,9 @@ export default async function DashboardPage({ searchParams }) {
               <div className={styles.statusPill}>
                 Bot status: <strong>{takeoverStatus.label}</strong>
               </div>
+              <Link href="/dashboard/outreach" className={styles.logoutButton}>
+                Outreach CRM
+              </Link>
               <form action={logoutAction}>
                 <button className={styles.logoutButton} type="submit">
                   Log out

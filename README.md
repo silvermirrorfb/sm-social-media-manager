@@ -13,6 +13,9 @@ AI-powered social inbox and moderation system for Silver Mirror Facial Bar.
 ## Core routes
 
 - `/dashboard` operations dashboard
+- `/dashboard/outreach` bulk outreach CRM (CSV import, AI drafting, selective live send)
+- `/dashboard/api/outreach/generate` outreach draft generation endpoint
+- `/dashboard/api/outreach/send` outreach send endpoint
 - `/tiktok/connect` TikTok connect and live account check
 - `/api/instagram/webhook` Meta webhook callback (Instagram + Facebook payloads)
 - `/api/tiktok/oauth/start` TikTok OAuth start
