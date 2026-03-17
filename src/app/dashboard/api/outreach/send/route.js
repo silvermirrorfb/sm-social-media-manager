@@ -47,12 +47,14 @@ export async function POST(request) {
     const results = [];
 
     for (const rawItem of items) {
+      const id = String(rawItem.id || '').trim();
       const platform = normalizePlatform(rawItem.platform);
       const recipientId = String(rawItem.recipientId || '').trim();
       const message = String(rawItem.message || '').trim();
       const username = String(rawItem.username || rawItem.name || '').trim();
 
       const baseResult = {
+        id,
         platform,
         recipientId,
         username,

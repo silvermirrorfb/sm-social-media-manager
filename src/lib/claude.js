@@ -223,6 +223,75 @@ Instructions:
   }
 }
 
+export async function generateOutreachFollowUpMessage({
+  priorMessage = '',
+  followUpGoal = '',
+  contact = {},
+  campaignName = '',
+  followUpNumber = 1,
+}) {
+  const prior = String(priorMessage || '').trim();
+  if (!prior) return '';
+
+  const noApiKey = !getEnv('ANTHROPIC_API_KEY');
+  if (noApiKey) {
+    return `${prior}\n\nFollowing up in case this got buried. ${
+      String(followUpGoal || 'Would love to connect if you are open to it.').trim()
+    }`;
+  }
+
+  const name = contact.name || '';
+  const firstName = contact.firstName || '';
+  const username = contact.username || '';
+  const notes = contact.notes || '';
+  const platform = contact.platform || 'instagram';
+
+  const prompt = `Write follow-up message #${followUpNumber} for an influencer outreach campaign.
+
+Campaign name: ${campaignName || 'General Outreach'}
+Platform: ${platform}
+Contact:
+- Name: ${name || 'unknown'}
+- First name: ${firstName || 'unknown'}
+- Username: ${username || 'unknown'}
+- Notes: ${notes || 'none'}
+
+Original outreach message:
+"""${prior}"""
+
+Follow-up goal:
+"""${String(followUpGoal || 'Nudge gently and offer a quick next step.').trim()}"""
+
+Rules:
+- Keep under 350 characters.
+- Do not repeat the original wording.
+- Warm, concise, premium tone.
+- No pressure language.
+- No more than one emoji.
+- End with a clear but soft CTA.
+- Return only the final follow-up message text.`;
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 200,
+      temperature: 0.45,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim();
+
+    return text || `${prior}\n\nJust following up in case this got buried.`;
+  } catch (error) {
+    console.error('[Claude] Outreach follow-up generation failed:', error?.message || error);
+    return `${prior}\n\nJust following up in case this got buried.`;
+  }
+}
+
 // ─── Classify a comment ─────────────────────────────────────
 // Returns: { category, confidence, action, replyText, triggers, severity, reason }
 export async function classifyComment(commentText, username, followerCount = null) {

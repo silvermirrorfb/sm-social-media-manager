@@ -15,6 +15,7 @@ AI-powered social inbox and moderation system for Silver Mirror Facial Bar.
 - `/dashboard` operations dashboard
 - `/dashboard/outreach` bulk outreach CRM (CSV import, AI drafting, selective live send)
 - `/dashboard/api/outreach/generate` outreach draft generation endpoint
+- `/dashboard/api/outreach/followup` outreach follow-up draft generation endpoint
 - `/dashboard/api/outreach/send` outreach send endpoint
 - `/tiktok/connect` TikTok connect and live account check
 - `/api/instagram/webhook` Meta webhook callback (Instagram + Facebook payloads)
@@ -52,3 +53,14 @@ See `.env.example` for the complete list. Key groups:
 2. `npm install`
 3. Copy `.env.example` to `.env.local`
 4. `npm run dev`
+
+## Outreach CRM workflow
+
+- Parse contacts from pasted CSV or uploaded file
+- Generate AI-personalized first-touch drafts in bulk
+- Save and reuse campaign templates (pitch + defaults)
+- Apply segment-based selection (sendable, failed, platform, custom query)
+- Generate follow-up drafts for selected recipients
+- Retry failed live sends in one click
+- Live send for Instagram/Facebook rows with `recipient_id`
+- Export/copy drafts for manual channels (including TikTok draft mode)

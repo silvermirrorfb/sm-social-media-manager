@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import styles from './outreach.module.css';
 
 const SAMPLE_HEADERS = 'platform,username,name,first_name,recipient_id,notes,email';
+const LOCAL_TEMPLATE_KEY = 'sm_outreach_templates_v1';
 
 function normalizePlatform(value, fallback = 'instagram') {
   const normalized = String(value || fallback).trim().toLowerCase();
@@ -140,7 +141,7 @@ function parseContacts(rawText, defaultPlatform) {
 }
 
 function statusClass(status) {
-  if (status === 'sent' || status === 'generated') return styles.chipLive;
+  if (status === 'sent') return styles.chipLive;
   if (status === 'failed') return styles.chipError;
   if (status === 'skipped') return styles.chipSkip;
   return styles.chipDraft;
@@ -168,6 +169,33 @@ export default function OutreachPage() {
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [sendSummary, setSendSummary] = useState(null);
+  const [templateName, setTemplateName] = useState('Brand Collab Template');
+  const [savedTemplates, setSavedTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [segmentQuery, setSegmentQuery] = useState('');
+  const [followUpGoal, setFollowUpGoal] = useState('Quick nudge and invite them to reply if interested.');
+  const [followUpNumber, setFollowUpNumber] = useState(1);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LOCAL_TEMPLATE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setSavedTemplates(parsed);
+      }
+    } catch {
+      // noop
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LOCAL_TEMPLATE_KEY, JSON.stringify(savedTemplates));
+    } catch {
+      // noop
+    }
+  }, [savedTemplates]);
 
   const sendableDrafts = useMemo(
     () => drafts.filter((item) => item.canSendNow),
@@ -181,6 +209,32 @@ export default function OutreachPage() {
     });
     return count;
   }, [drafts, selectedIds]);
+
+  const selectedDraftCount = useMemo(() => {
+    let count = 0;
+    drafts.forEach((item) => {
+      if (selectedIds.has(item.id)) count += 1;
+    });
+    return count;
+  }, [drafts, selectedIds]);
+
+  const failedSendableCount = useMemo(
+    () => drafts.filter((item) => item.status === 'failed' && item.canSendNow).length,
+    [drafts]
+  );
+
+  function buildSendItemsFromDrafts(sourceDrafts) {
+    return sourceDrafts
+      .filter((item) => item.canSendNow)
+      .map((item) => ({
+        id: item.id,
+        platform: item.platform,
+        recipientId: item.recipientId,
+        username: item.username,
+        name: item.name,
+        message: item.message,
+      }));
+  }
 
   function handleParse() {
     setIsParsing(true);
@@ -241,22 +295,11 @@ export default function OutreachPage() {
     }
   }
 
-  async function handleSendSelected() {
+  async function sendItems(items) {
     setErrorMessage('');
     setIsSending(true);
 
     try {
-      const items = drafts
-        .filter((item) => item.canSendNow && selectedIds.has(item.id))
-        .map((item) => ({
-          id: item.id,
-          platform: item.platform,
-          recipientId: item.recipientId,
-          username: item.username,
-          name: item.name,
-          message: item.message,
-        }));
-
       if (items.length === 0) {
         throw new Error('No sendable recipients selected.');
       }
@@ -276,11 +319,13 @@ export default function OutreachPage() {
       }
 
       setSendSummary(payload);
-      const statusMap = new Map((payload.results || []).map((item) => [`${item.platform}:${item.recipientId}:${item.message}`, item]));
+      const statusMapById = new Map((payload.results || []).map((item) => [item.id, item]));
+      const statusMapByKey = new Map((payload.results || []).map((item) => [`${item.platform}:${item.recipientId}:${item.message}`, item]));
       setDrafts((current) =>
         current.map((draft) => {
-          const key = `${draft.platform}:${draft.recipientId}:${draft.message}`;
-          const result = statusMap.get(key);
+          const byId = statusMapById.get(draft.id);
+          const byKey = statusMapByKey.get(`${draft.platform}:${draft.recipientId}:${draft.message}`);
+          const result = byId || byKey;
           if (!result) return draft;
           return {
             ...draft,
@@ -294,6 +339,117 @@ export default function OutreachPage() {
     } finally {
       setIsSending(false);
     }
+  }
+
+  async function handleSendSelected() {
+    const items = buildSendItemsFromDrafts(drafts.filter((item) => selectedIds.has(item.id)));
+    await sendItems(items);
+  }
+
+  function saveCurrentTemplate() {
+    const name = templateName.trim();
+    if (!name) {
+      setErrorMessage('Template name is required.');
+      return;
+    }
+
+    const next = [
+      {
+        id: `${Date.now()}`,
+        name,
+        campaignName,
+        defaultPlatform,
+        basePitch,
+        followUpGoal,
+        createdAt: new Date().toISOString(),
+      },
+      ...savedTemplates.filter((item) => item.name !== name),
+    ].slice(0, 25);
+    setSavedTemplates(next);
+    setSelectedTemplateId(next[0]?.id || '');
+  }
+
+  function applySelectedTemplate() {
+    const selected = savedTemplates.find((item) => item.id === selectedTemplateId);
+    if (!selected) return;
+    setTemplateName(selected.name || templateName);
+    setCampaignName(selected.campaignName || campaignName);
+    setDefaultPlatform(selected.defaultPlatform || defaultPlatform);
+    setBasePitch(selected.basePitch || basePitch);
+    setFollowUpGoal(selected.followUpGoal || followUpGoal);
+  }
+
+  function deleteSelectedTemplate() {
+    if (!selectedTemplateId) return;
+    const next = savedTemplates.filter((item) => item.id !== selectedTemplateId);
+    setSavedTemplates(next);
+    setSelectedTemplateId(next[0]?.id || '');
+  }
+
+  function setSelectionBySegment(mode) {
+    const next = new Set();
+    const query = segmentQuery.trim().toLowerCase();
+    drafts.forEach((item) => {
+      const haystack = [item.username, item.name, item.notes, item.email, item.platform]
+        .join(' ')
+        .toLowerCase();
+
+      const matchesCustom = query && haystack.includes(query);
+      if (mode === 'all') next.add(item.id);
+      if (mode === 'sendable' && item.canSendNow) next.add(item.id);
+      if (mode === 'failed' && item.status === 'failed') next.add(item.id);
+      if (mode === 'instagram' && item.platform === 'instagram') next.add(item.id);
+      if (mode === 'facebook' && item.platform === 'facebook') next.add(item.id);
+      if (mode === 'tiktok' && item.platform === 'tiktok') next.add(item.id);
+      if (mode === 'custom' && matchesCustom) next.add(item.id);
+    });
+    setSelectedIds(next);
+  }
+
+  async function generateFollowUpForSelected() {
+    setErrorMessage('');
+    setIsGenerating(true);
+
+    try {
+      const items = drafts.filter((item) => selectedIds.has(item.id));
+      if (items.length === 0) {
+        throw new Error('Select at least one draft first.');
+      }
+
+      const response = await fetch('/dashboard/api/outreach/followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignName,
+          followUpGoal,
+          followUpNumber,
+          items,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || 'Failed to generate follow-up drafts.');
+      }
+
+      const map = new Map((payload.results || []).map((item) => [item.id, item]));
+      setDrafts((current) => current.map((draft) => map.get(draft.id) || draft));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Follow-up generation failed.');
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function retryFailedSends() {
+    const failedDrafts = drafts.filter((item) => item.status === 'failed' && item.canSendNow);
+    if (failedDrafts.length === 0) {
+      setErrorMessage('No failed sendable drafts to retry.');
+      return;
+    }
+    setSelectedIds(new Set(failedDrafts.map((item) => item.id)));
+    const items = buildSendItemsFromDrafts(failedDrafts);
+    await sendItems(items);
   }
 
   async function copyDraftsToClipboard() {
@@ -382,6 +538,74 @@ export default function OutreachPage() {
               </div>
             </div>
 
+            <div className={styles.toolbarGrid}>
+              <div>
+                <label className={styles.label} htmlFor="selectedTemplateId">Saved template</label>
+                <select
+                  id="selectedTemplateId"
+                  className={styles.select}
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                >
+                  <option value="">Select a template...</option>
+                  {savedTemplates.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <div className={styles.buttonRow} style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className={`${styles.secondaryButton} ${!selectedTemplateId ? styles.disabled : ''}`}
+                    onClick={applySelectedTemplate}
+                    disabled={!selectedTemplateId}
+                  >
+                    Apply Template
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.secondaryButton} ${!selectedTemplateId ? styles.disabled : ''}`}
+                    onClick={deleteSelectedTemplate}
+                    disabled={!selectedTemplateId}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className={styles.label} htmlFor="templateName">Template name</label>
+                <input
+                  id="templateName"
+                  className={styles.input}
+                  value={templateName}
+                  onChange={(event) => setTemplateName(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className={`${styles.secondaryButton} ${!templateName.trim() ? styles.disabled : ''}`}
+                  onClick={saveCurrentTemplate}
+                  disabled={!templateName.trim()}
+                  style={{ marginTop: 8 }}
+                >
+                  Save Current as Template
+                </button>
+              </div>
+
+              <div>
+                <label className={styles.label} htmlFor="followUpGoal">Default follow-up goal</label>
+                <textarea
+                  id="followUpGoal"
+                  className={styles.textarea}
+                  value={followUpGoal}
+                  onChange={(event) => setFollowUpGoal(event.target.value)}
+                  style={{ minHeight: 110 }}
+                />
+                <p className={styles.subtle}>Used by the follow-up generator for selected drafts.</p>
+              </div>
+            </div>
+
             <label className={styles.label} htmlFor="basePitch">Base pitch</label>
             <textarea
               id="basePitch"
@@ -463,6 +687,94 @@ export default function OutreachPage() {
               {isSending ? 'Sending...' : `Send Selected Live (${selectedSendableCount})`}
             </button>
           </div>
+
+          <div className={styles.chipRow}>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('all')}>
+              Select All Drafts
+            </button>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('sendable')}>
+              Select Sendable
+            </button>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('failed')}>
+              Select Failed
+            </button>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('instagram')}>
+              Instagram
+            </button>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('facebook')}>
+              Facebook
+            </button>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('tiktok')}>
+              TikTok
+            </button>
+            <button
+              type="button"
+              className={styles.chipButton}
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </button>
+          </div>
+          <div className={styles.row} style={{ marginTop: 10 }}>
+            <div>
+              <label className={styles.label} htmlFor="segmentQuery">Segment filter (name, username, note, email)</label>
+              <input
+                id="segmentQuery"
+                className={styles.input}
+                value={segmentQuery}
+                onChange={(event) => setSegmentQuery(event.target.value)}
+                placeholder="e.g. miami, wellness, @handle"
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                className={`${styles.secondaryButton} ${!segmentQuery.trim() ? styles.disabled : ''}`}
+                onClick={() => setSelectionBySegment('custom')}
+                disabled={!segmentQuery.trim()}
+              >
+                Select Matching Segment
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.row} style={{ marginTop: 10 }}>
+            <div>
+              <label className={styles.label} htmlFor="followUpNumber">Follow-up number</label>
+              <input
+                id="followUpNumber"
+                type="number"
+                min="1"
+                max="4"
+                className={styles.input}
+                value={followUpNumber}
+                onChange={(event) => {
+                  const next = Number(event.target.value || 1);
+                  if (Number.isNaN(next)) return;
+                  setFollowUpNumber(Math.max(1, Math.min(4, next)));
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                className={`${styles.secondaryButton} ${isGenerating || selectedDraftCount === 0 ? styles.disabled : ''}`}
+                onClick={generateFollowUpForSelected}
+                disabled={isGenerating || selectedDraftCount === 0}
+              >
+                {isGenerating ? 'Generating...' : `Generate Follow-up (${selectedDraftCount})`}
+              </button>
+              <button
+                type="button"
+                className={`${styles.secondaryButton} ${isSending || failedSendableCount === 0 ? styles.disabled : ''}`}
+                onClick={retryFailedSends}
+                disabled={isSending || failedSendableCount === 0}
+              >
+                Retry Failed Sends ({failedSendableCount})
+              </button>
+            </div>
+          </div>
+
           <div className={styles.warning}>
             Outbound platform policies still apply. Live send currently supports Instagram + Facebook rows that include `recipient_id`.
             TikTok is draft/export mode in this app for now.
@@ -484,6 +796,10 @@ export default function OutreachPage() {
             <div className={styles.stat}>
               <div className={styles.statLabel}>Selected to Send</div>
               <div className={styles.statValue}>{selectedSendableCount}</div>
+            </div>
+            <div className={styles.stat}>
+              <div className={styles.statLabel}>Selected Drafts</div>
+              <div className={styles.statValue}>{selectedDraftCount}</div>
             </div>
           </div>
 
@@ -554,7 +870,6 @@ export default function OutreachPage() {
                         <input
                           type="checkbox"
                           checked={selectedIds.has(item.id)}
-                          disabled={!item.canSendNow}
                           onChange={(event) => {
                             setSelectedIds((current) => {
                               const next = new Set(current);

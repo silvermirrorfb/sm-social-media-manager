@@ -1,5 +1,31 @@
 # Live Handoff Log
 
+## 2026-03-17 00:18 ET
+
+### Completed
+- Finished Outreach CRM advanced controls in production UI:
+  - saved templates (save/apply/delete)
+  - segment selectors (all/sendable/failed/platform/custom query)
+  - follow-up draft generation controls
+  - retry failed sends button
+- Added follow-up generation route:
+  - `/dashboard/api/outreach/followup`
+- Added Claude helper for follow-up message generation:
+  - `generateOutreachFollowUpMessage(...)` in `/src/lib/claude.js`
+- Hardened send result mapping:
+  - send route now returns `id`
+  - UI reconciles send statuses by `id` first, then key fallback
+- Fixed retry race condition:
+  - removed async `setTimeout` selection dependency
+  - retry now sends deterministic failed-sendable batch
+
+### Validation
+- `npm run build` completed successfully on 2026-03-17 with all routes compiling.
+
+### Next
+- Monitor live Outreach CRM usage and adjust rate limits if operators run very large send batches.
+- Add outreach analytics rollups on `/dashboard` (campaign-level sent/failed/replied views).
+
 ## 2026-03-16 22:20 ET
 
 ### Completed
