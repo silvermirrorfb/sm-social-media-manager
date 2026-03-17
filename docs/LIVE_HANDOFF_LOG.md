@@ -331,3 +331,26 @@
 
 ### Notes
 - I could confirm webhook ingestion and threshold hit from Vercel logs, but I could not directly confirm the Google Sheet row or Sierra inbox delivery from this environment because Google API access is blocked here.
+
+## 2026-03-17 13:55 EDT
+
+### Completed
+- Fixed remaining bare Silver Mirror URLs inside the Claude system prompt so generated DM replies are more likely to produce clickable links:
+  - `/src/lib/system-prompt.txt`
+- Added complaint notification emails for `hide_and_flag` moderation actions on Instagram and Facebook:
+  - `/src/lib/comment-handler.js`
+  - `/src/lib/fb-comment-handler.js`
+- Added a sheet-backed persistent spam count fallback so repeat-offender thresholds can still recover across serverless cold starts using existing moderation log history:
+  - `/src/lib/sheets.js`
+  - `/src/lib/comment-handler.js`
+  - `/src/lib/fb-comment-handler.js`
+
+### QA
+- `npm run lint` passed
+- `npm run build` passed
+
+### Notes
+- Complaint alerts currently go to both:
+  - `hello@silvermirror.com`
+  - `sierra.case@silvermirror.com`
+- Persistent spam counting now uses the existing Google Sheet logs as a durable fallback when in-memory counts reset.

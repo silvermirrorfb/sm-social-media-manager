@@ -1,6 +1,6 @@
 import { replyToComment, hideComment } from './instagram';
 import { classifyComment } from './claude';
-import { logToSheet } from './sheets';
+import { getPersistentSpamCount, logToSheet } from './sheets';
 import {
   needsHumanReview,
   classifySeverity,
@@ -65,6 +65,59 @@ async function sendRepeatSpamAlert({
   return { recipient, ...result };
 }
 
+async function sendComplaintAlert({
+  platform,
+  username,
+  commentId,
+  commentText,
+  category,
+  severity,
+  triggers,
+  reason,
+}) {
+  const recipients = [
+    ESCALATION_CONTACTS.general?.email,
+    ESCALATION_CONTACTS.socialMediaManager?.email,
+  ].filter(Boolean);
+  const recipient = Array.from(new Set(recipients)).join(', ') || 'hello@silvermirror.com';
+  const safeComment = String(commentText || '(empty)')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const result = await sendEmail({
+    to: recipient,
+    subject: `[Silver Mirror Moderation] Complaint flagged on ${platform}`,
+    text: [
+      `A complaint was hidden and flagged for review on ${platform}.`,
+      '',
+      `Username: @${username}`,
+      `Comment ID: ${commentId}`,
+      `Category: ${category}`,
+      `Severity: ${severity}`,
+      `Triggers: ${(triggers || []).join(', ') || 'none'}`,
+      `Reason: ${reason || 'complaint routed to hidden review flow'}`,
+      '',
+      'Comment:',
+      commentText || '(empty)',
+    ].join('\n'),
+    html: `
+      <p>A complaint was hidden and flagged for review on <strong>${platform}</strong>.</p>
+      <ul>
+        <li><strong>Username:</strong> @${username}</li>
+        <li><strong>Comment ID:</strong> ${commentId}</li>
+        <li><strong>Category:</strong> ${category}</li>
+        <li><strong>Severity:</strong> ${severity}</li>
+        <li><strong>Triggers:</strong> ${(triggers || []).join(', ') || 'none'}</li>
+        <li><strong>Reason:</strong> ${reason || 'complaint routed to hidden review flow'}</li>
+      </ul>
+      <p><strong>Comment</strong></p>
+      <blockquote>${safeComment}</blockquote>
+    `,
+  });
+
+  return { recipient, ...result };
+}
+
 // ─── Handle an incoming comment event ───────────────────────
 export async function handleComment(commentData) {
   const commentId = commentData.id;
@@ -119,6 +172,12 @@ export async function handleComment(commentData) {
 
     if ((action === 'hide' || action === 'block') && isSpamCategory) {
       spamCount = incrementSpamCount('instagram', username);
+      const persistentSpamCount = await getPersistentSpamCount({
+        type: 'INSTAGRAM_COMMENT',
+        username,
+        windowDays: MODERATION_CONFIG.spamWindowDays,
+      }).catch(() => 0);
+      spamCount = Math.max(spamCount, persistentSpamCount + 1);
       if (!triggers.includes('auto_spam_hide')) {
         triggers.push('auto_spam_hide');
       }
@@ -191,8 +250,38 @@ export async function handleComment(commentData) {
       case 'hide_and_flag':
         await hideComment(commentId);
         console.log(`[Comment] Hidden + flagged: @${username} (${category}, severity: ${computedSeverity})`);
-        // TODO: Send notification email to team for review
-        // TODO: Post to Slack moderation channel
+        {
+          const alertResult = await sendComplaintAlert({
+            platform: 'instagram',
+            username,
+            commentId,
+            commentText,
+            category,
+            severity: computedSeverity,
+            triggers,
+            reason,
+          });
+
+          await logToSheet({
+            type: 'INSTAGRAM_COMMENT',
+            timestamp: new Date().toISOString(),
+            username,
+            incomingMessage: commentText,
+            response: alertResult.ok
+              ? `Complaint alert emailed to ${alertResult.recipient}`
+              : `Complaint alert failed: ${alertResult.reason || 'email_send_failed'}`,
+            action: alertResult.ok ? 'complaint_alert_sent' : 'complaint_alert_failed',
+            category,
+            reason: reason || '',
+            confidence: confidence?.toFixed(2) || '',
+            severity: computedSeverity,
+            triggers: serializeModerationTriggers(triggers, {
+              comment_id: commentId,
+              moderation_alert_email: alertResult.recipient,
+            }),
+            needsReview: 'YES',
+          }).catch(() => {});
+        }
         break;
 
       case 'block':

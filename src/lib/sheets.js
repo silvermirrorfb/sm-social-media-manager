@@ -193,3 +193,46 @@ export async function getRecentLogRows(limit = 150) {
 
   return allRows.slice(0, limit);
 }
+
+export async function getPersistentSpamCount({ type, username, windowDays = 30 }) {
+  const normalizedType = String(type || '').trim().toUpperCase();
+  const normalizedUsername = String(username || '').trim().replace(/^@/, '').toLowerCase();
+  if (!normalizedType || !normalizedUsername) return 0;
+
+  const sheetId = getEnv('GOOGLE_SHEET_ID');
+  if (!sheetId) return 0;
+
+  const sheets = getSheetsClient();
+  if (!sheets) return 0;
+
+  const cutoff = Date.now() - (Number(windowDays || 30) * 24 * 60 * 60 * 1000);
+  let count = 0;
+
+  for (const sheetName of [LOG_SHEET_NAME, LEGACY_SHEET_NAME]) {
+    try {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: `${sheetName}!A2:L`,
+      });
+
+      const rows = res.data.values || [];
+      for (const row of rows) {
+        const timestamp = new Date(row[0] || 0).getTime();
+        const rowType = String(row[1] || '').trim().toUpperCase();
+        const rowUsername = String(row[2] || '').trim().replace(/^@/, '').toLowerCase();
+        const action = String(row[5] || '').trim().toLowerCase();
+
+        if (Number.isNaN(timestamp) || timestamp < cutoff) continue;
+        if (rowType !== normalizedType) continue;
+        if (rowUsername !== normalizedUsername) continue;
+        if (!action.includes('hide_auto_spam')) continue;
+
+        count += 1;
+      }
+    } catch {
+      // Sheet may not exist or be temporarily unavailable.
+    }
+  }
+
+  return count;
+}
