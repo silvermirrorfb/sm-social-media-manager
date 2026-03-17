@@ -280,6 +280,12 @@
   gap: 12px;
 }
 
+.threadList {
+  max-height: 860px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .opsRow,
 .queueCard,
 .threadCard {
@@ -339,6 +345,23 @@
 .threadCardActive {
   border-color: rgba(217, 111, 74, 0.35);
   background: linear-gradient(180deg, rgba(255, 251, 248, 0.98), rgba(255, 242, 235, 0.94));
+}
+
+.filterSummary {
+  margin: 14px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 14px 16px;
+}
+
+.filterSummary strong {
+  display: block;
+  margin-bottom: 4px;
 }
 
 .severityPill {
@@ -513,6 +536,9 @@
 .timeline {
   display: grid;
   gap: 14px;
+  max-height: 860px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .timelineItem {
@@ -606,6 +632,10 @@
   line-height: 1.45;
 }
 
+.table tbody tr:hover {
+  background: rgba(255, 248, 242, 0.78);
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   font-size: 0.86rem;
@@ -677,6 +707,7 @@
 
   .toolbar,
   .searchForm,
+  .filterSummary,
   .selectedThreadHeader,
   .threadHeader,
   .queueHeader,

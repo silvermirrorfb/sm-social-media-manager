@@ -1,5 +1,33 @@
 # Live Handoff Log
 
+## 2026-03-17 08:45 ET
+
+### Completed
+- Added real linting support:
+  - `.eslintrc.json`
+  - installed compatible `eslint@8.57.0` and `eslint-config-next@14.2.35`
+- Improved dashboard UI:
+  - active workspace filter summary bar
+  - range filters carried across platform/channel/view links
+  - scrollable thread list and timeline panels
+  - table hover states for faster scanning
+- Improved outreach UI:
+  - workflow focus tiles
+  - send-state legend
+  - table hover states
+- Added Claude cowork QA prompt pack:
+  - `/docs/CLAUDE_COWORK_QA_COMMANDS.md`
+
+### QA
+- `npm run lint` passed.
+- `npm run build` passed.
+- Local authenticated dashboard QA completed using a valid dashboard session cookie:
+  - confirmed dashboard renders range filters and workspace filter summary
+  - confirmed outreach page renders focus tiles and send-state legend
+- `npm audit --omit=dev` completed with one high severity advisory on `next`:
+  - current advisory path recommends a breaking major upgrade (`next@16.x`)
+  - not auto-applied in this pass
+
 ## 2026-03-17 08:03 ET
 
 ### Completed

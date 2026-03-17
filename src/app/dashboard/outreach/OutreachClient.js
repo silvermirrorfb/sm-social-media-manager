@@ -223,6 +223,11 @@ export default function OutreachPage() {
     [drafts]
   );
 
+  const activeTemplate = useMemo(
+    () => savedTemplates.find((item) => item.id === selectedTemplateId) || null,
+    [savedTemplates, selectedTemplateId]
+  );
+
   function buildSendItemsFromDrafts(sourceDrafts) {
     return sourceDrafts
       .filter((item) => item.canSendNow)
@@ -688,6 +693,30 @@ export default function OutreachPage() {
             </button>
           </div>
 
+          <div className={styles.focusBoard}>
+            <div className={styles.focusTile}>
+              <span className={styles.statLabel}>Active template</span>
+              <strong className={styles.focusValue}>{activeTemplate?.name || 'None selected'}</strong>
+              <p className={styles.subtle}>
+                {activeTemplate
+                  ? `${activeTemplate.defaultPlatform} default platform`
+                  : 'Save a campaign setup to reuse your pitch and follow-up defaults.'}
+              </p>
+            </div>
+            <div className={styles.focusTile}>
+              <span className={styles.statLabel}>Current selection</span>
+              <strong className={styles.focusValue}>{selectedDraftCount} drafts selected</strong>
+              <p className={styles.subtle}>
+                {selectedSendableCount} sendable now, {failedSendableCount} failed-send retries available.
+              </p>
+            </div>
+            <div className={styles.focusTile}>
+              <span className={styles.statLabel}>Send path</span>
+              <strong className={styles.focusValue}>Instagram + Facebook live</strong>
+              <p className={styles.subtle}>TikTok stays in draft/export mode until direct outbound is approved.</p>
+            </div>
+          </div>
+
           <div className={styles.chipRow}>
             <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('all')}>
               Select All Drafts
@@ -773,6 +802,13 @@ export default function OutreachPage() {
                 Retry Failed Sends ({failedSendableCount})
               </button>
             </div>
+          </div>
+
+          <div className={styles.legendRow}>
+            <span className={`${styles.legendPill} ${styles.legendLive}`}>Live send ready</span>
+            <span className={`${styles.legendPill} ${styles.legendDraft}`}>Draft only / follow-up</span>
+            <span className={`${styles.legendPill} ${styles.legendFailed}`}>Failed send</span>
+            <span className={`${styles.legendPill} ${styles.legendSkip}`}>Skipped</span>
           </div>
 
           <div className={styles.warning}>

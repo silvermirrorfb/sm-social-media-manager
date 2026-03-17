@@ -1134,6 +1134,35 @@ export default async function DashboardPage({ searchParams }) {
             </div>
           ) : null}
 
+          {(selectedChannel !== 'all' ||
+            selectedView !== 'all' ||
+            selectedRange !== 'all' ||
+            selectedCampaign !== 'all' ||
+            Boolean(search)) ? (
+            <div className={styles.filterSummary}>
+              <div>
+                <strong>Current focus</strong>
+                <p className={styles.toolbarText}>
+                  {selectedPlatformConfig.name}
+                  {' · '}
+                  {CHANNEL_LABELS[selectedChannel]}
+                  {' · '}
+                  {VIEW_LABELS[selectedView]}
+                  {' · '}
+                  {RANGE_LABELS[selectedRange]}
+                  {selectedCampaign !== 'all' ? ` · ${selectedCampaign}` : ''}
+                  {search ? ` · search: "${search}"` : ''}
+                </p>
+              </div>
+              <Link
+                href={buildHref(selectedPlatform, 'all', 'all', '', '', 'all', 'all')}
+                className={styles.channelPill}
+              >
+                Clear workspace filters
+              </Link>
+            </div>
+          ) : null}
+
           {visibleEntries.length === 0 ? (
             <div className={styles.emptyState}>
               No {selectedPlatformConfig.name} {CHANNEL_LABELS[selectedChannel].toLowerCase()} match this view right now.

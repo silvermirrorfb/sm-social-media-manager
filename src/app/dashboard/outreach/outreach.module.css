@@ -191,6 +191,27 @@
   font-weight: 800;
 }
 
+.focusBoard {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.focusTile {
+  border: 1px solid #e1d4c1;
+  background: linear-gradient(180deg, #fbf7f0, #f3ece0);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.focusValue {
+  display: block;
+  margin-top: 4px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .tableWrap {
   overflow-x: auto;
   border: 1px solid #eadfce;
@@ -220,6 +241,10 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #6e5f49;
+}
+
+.table tbody tr:hover {
+  background: #fcf8f2;
 }
 
 .mono {
@@ -294,6 +319,48 @@
   background: #faf7f1;
 }
 
+.legendRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.legendPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.legendLive {
+  background: #d4f0da;
+  color: #14502a;
+  border-color: #b8dec2;
+}
+
+.legendDraft {
+  background: #e7e2ff;
+  color: #403088;
+  border-color: #d2caf6;
+}
+
+.legendFailed {
+  background: #ffd9d9;
+  color: #7b1e1e;
+  border-color: #f0b9b9;
+}
+
+.legendSkip {
+  background: #f1eadf;
+  color: #685846;
+  border-color: #e1d6c7;
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
@@ -304,6 +371,10 @@
   }
 
   .toolbarGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .focusBoard {
     grid-template-columns: 1fr;
   }
 }
