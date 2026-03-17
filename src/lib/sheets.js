@@ -2,7 +2,8 @@ import { google } from 'googleapis';
 import { getEnv } from './env';
 
 let sheetsClient = null;
-const LOG_SHEET_NAME = 'Instagram Log';
+const LOG_SHEET_NAME = 'Moderation Log';
+const LEGACY_SHEET_NAME = 'Instagram Log';
 let logSheetReady = false;
 
 function getSheetHeaders() {
@@ -168,16 +169,27 @@ export async function getRecentLogRows(limit = 150) {
   const sheets = getSheetsClient();
   if (!sheets) return [];
 
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `${LOG_SHEET_NAME}!A2:L`,
-    });
-
-    const rows = res.data.values || [];
-    return rows.slice(-limit).reverse();
-  } catch (err) {
-    console.error('[Sheets] Read logs failed:', err.message);
-    return [];
+  // Read from both the current and legacy sheet names to preserve old data
+  const allRows = [];
+  for (const sheetName of [LOG_SHEET_NAME, LEGACY_SHEET_NAME]) {
+    try {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: `${sheetName}!A2:L`,
+      });
+      const rows = res.data.values || [];
+      allRows.push(...rows);
+    } catch {
+      // Sheet may not exist — that's fine, skip it
+    }
   }
+
+  // Sort by timestamp descending and return the most recent entries
+  allRows.sort((a, b) => {
+    const ta = new Date(a[0] || 0).getTime();
+    const tb = new Date(b[0] || 0).getTime();
+    return tb - ta;
+  });
+
+  return allRows.slice(0, limit);
 }

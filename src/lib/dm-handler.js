@@ -87,7 +87,7 @@ export async function handleDirectMessage(event) {
     // Image / photo of skin
     if (event.message?.attachments?.some(a => a.type === 'image')) {
       await sendDirectMessage(senderId,
-        "Thanks for sharing ✨ For truly personalized guidance, the best next step is an Esthetician’s Choice facial so your esthetician can assess your skin in person and customize everything. You can book here: booking.silvermirror.com"
+        "Thanks for sharing ✨ For truly personalized guidance, the best next step is an Esthetician’s Choice facial so your esthetician can assess your skin in person and customize everything. You can book here: https://booking.silvermirror.com"
       );
       await logToSheet({
         type: 'INSTAGRAM_DM',

@@ -98,7 +98,7 @@ function getEnvSnapshot() {
     hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
     hasEmailAlerts,
     metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
-    facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
+    facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && (hasEnv('FACEBOOK_APP_SECRET') || hasMetaSecret) && hasVerifyToken,
     tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
   };
 }

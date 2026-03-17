@@ -534,6 +534,17 @@ export default function OutreachPage() {
 
   async function handleSendSelected() {
     const items = buildSendItemsFromDrafts(selectedDrafts);
+    if (items.length === 0) {
+      setErrorMessage('No sendable recipients in the current selection.');
+      return;
+    }
+
+    const confirmMessage = items.length === 1
+      ? `Send 1 live outreach message now?`
+      : `Send ${items.length} live outreach messages now? This cannot be undone.`;
+
+    if (!window.confirm(confirmMessage)) return;
+
     if (selectedIneligibleCount > 0 || selectedReviewCount > 0) {
       const details = [];
       if (selectedIneligibleCount > 0) {
@@ -651,6 +662,7 @@ export default function OutreachPage() {
       setErrorMessage('No failed sendable drafts to retry.');
       return;
     }
+    if (!window.confirm(`Retry sending ${failedDrafts.length} failed message(s)?`)) return;
     setSelectedIds(new Set(failedDrafts.map((item) => item.id)));
     const items = buildSendItemsFromDrafts(failedDrafts);
     await sendItems(items);
@@ -1083,7 +1095,7 @@ export default function OutreachPage() {
           {errorMessage ? <div className={styles.warning} style={{ marginTop: 12 }}>{errorMessage}</div> : null}
           {statusMessage ? <div className={styles.notice} style={{ marginTop: 12 }}>{statusMessage}</div> : null}
           {sendSummary ? (
-            <div className={styles.warning} style={{ marginTop: 12 }}>
+            <div className={sendSummary.failedCount > 0 ? styles.warning : styles.notice} style={{ marginTop: 12 }}>
               Send complete: {sendSummary.sentCount} sent, {sendSummary.failedCount} failed, {sendSummary.skippedCount} skipped.
             </div>
           ) : null}

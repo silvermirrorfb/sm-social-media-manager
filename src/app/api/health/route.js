@@ -41,7 +41,7 @@ export async function GET() {
       metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
       hasFacebookPageToken,
       hasFacebookPageId,
-      facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
+      facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && (hasFacebookAppSecret || hasMetaSecret) && hasVerifyToken,
       hasTikTokClientKey,
       hasTikTokClientSecret,
       tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
