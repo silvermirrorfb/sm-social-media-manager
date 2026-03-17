@@ -460,6 +460,9 @@ function getSeverityClass(severity) {
 export default async function DashboardPage({ searchParams }) {
   const env = getEnvSnapshot();
 
+  const rawRows = await getRecentLogRows(250);
+  const entries = rawRows.map(normalizeLogRow);
+  const PLATFORMS = getPlatforms(env, entries);
   const selectedPlatform = PLATFORMS.some((platform) => platform.key === searchParams?.platform)
     ? searchParams.platform
     : 'instagram';
@@ -467,10 +470,6 @@ export default async function DashboardPage({ searchParams }) {
   const selectedView = VIEW_LABELS[searchParams?.view] ? searchParams.view : 'all';
   const search = typeof searchParams?.q === 'string' ? searchParams.q.trim() : '';
   const selectedThreadKey = typeof searchParams?.thread === 'string' ? searchParams.thread : '';
-
-  const rawRows = await getRecentLogRows(250);
-  const entries = rawRows.map(normalizeLogRow);
-  const PLATFORMS = getPlatforms(env, entries);
 
   const platformEntries = entries.filter((entry) => entry.platform === selectedPlatform);
   const channelEntries =
