@@ -165,7 +165,7 @@ export const CONTACTS = {
     email: 'memberships@silvermirror.com',
     phone: '(888) 677-0055',
     role: 'Membership Questions',
-    faqUrl: 'silvermirror.com/our-story/memberships-faq',
+    faqUrl: 'https://silvermirror.com/our-story/memberships-faq',
   },
   general: {
     email: 'hello@silvermirror.com',
@@ -179,7 +179,7 @@ export const CONTACTS = {
   products: {
     email: 'hello@silvermirror.com',
     shopEmail: 'shop@silvermirror.com',
-    shopUrl: 'shop.silvermirror.com',
+    shopUrl: 'https://shop.silvermirror.com',
     role: 'Product / E-commerce',
   },
   careers: {

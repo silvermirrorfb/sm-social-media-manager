@@ -276,3 +276,36 @@
 ### Next
 - Push this batch to `main` and confirm Vercel deploy goes green.
 - Once production SMTP vars are present, verify `/api/health` shows `hasEmailAlerts: true`.
+
+## 2026-03-17 12:30 EDT
+
+### Completed
+- Corrected Facebook readiness reporting so production treats either `FACEBOOK_APP_SECRET` or `META_APP_SECRET` as valid for Facebook webhook readiness:
+  - `/src/app/api/health/route.js`
+  - `/src/app/dashboard/page.js`
+- Improved Google Sheets compatibility:
+  - new writes go to `Moderation Log`
+  - dashboard reads merge `Moderation Log` + legacy `Instagram Log`
+  - `/src/lib/sheets.js`
+- Added spam tracker pruning to cap in-memory moderation state growth:
+  - `/src/lib/comment-moderation.js`
+- Fixed non-clickable bare URLs in DM image replies:
+  - `/src/lib/dm-handler.js`
+  - `/src/lib/fb-dm-handler.js`
+- Added confirm dialogs before live outreach send and failed-send retry:
+  - `/src/app/dashboard/outreach/OutreachClient.js`
+- Fixed bare URLs in shared reply/routing content so Instagram/Facebook render them as clickable links:
+  - `/src/lib/templates.js`
+  - `/src/lib/routing.js`
+
+### QA
+- `npm run lint` passed
+- `npm run build` passed
+- Production health verification reported:
+  - `facebookWebhookReady: true`
+  - `hasEmailAlerts: true`
+  - `metaWebhookReady: true`
+
+### Notes
+- One cowork-introduced regression was corrected before ship:
+  - smart quotes in `/src/lib/fb-dm-handler.js` were replaced with a normal JS string literal
