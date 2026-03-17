@@ -73,7 +73,7 @@ export async function handleMessengerMessage(event) {
     if (event.message?.attachments?.some((a) => a.type === 'audio')) {
       await sendMessengerMessage(
         senderId,
-        "I'm not able to listen to voice messages, but I'd love to help! Could you type out your question?"
+        'Thanks for the voice note 💛 I can’t play audio here yet, but I’m happy to help if you type your question.'
       );
       await logToSheet({
         type: 'FACEBOOK_DM',
@@ -90,7 +90,7 @@ export async function handleMessengerMessage(event) {
     if (event.message?.attachments?.some((a) => a.type === 'image')) {
       await sendMessengerMessage(
         senderId,
-        "Thanks for sharing! While I can give general guidance, the best way to get a personalized recommendation is to book an Esthetician's Choice facial — your esthetician will do a full skin analysis and customize the treatment. Book at booking.silvermirror.com!"
+        'Thanks for sharing ✨ For truly personalized guidance, the best next step is an Esthetician’s Choice facial so your esthetician can assess your skin in person and customize everything. You can book here: booking.silvermirror.com'
       );
       await logToSheet({
         type: 'FACEBOOK_DM',
@@ -141,9 +141,9 @@ export async function handleMessengerMessage(event) {
 
       if (isSpanish) {
         responseText =
-          'Me encantaría conectarte con alguien de nuestro equipo. Para ayuda inmediata en español, llama a Brickell al (786) 899-0600 o Coral Gables al (786) 988-0520. También puedes compartir tu email y alguien se comunicará contigo 💛';
+          'Te conecto con nuestro equipo 💛 Para ayuda inmediata en español, llama a Brickell (786) 899-0600 o Coral Gables (786) 988-0520. También puedes compartir tu email y te contactamos.';
       } else {
-        responseText = 'Let me have someone on our team follow up with you directly. Can you share your email? 💛';
+        responseText = 'I can have a team member follow up with you directly. Can you share the best email for us to reach you? 💛';
       }
       hasEscalated = true;
       escalatedThisMessage = true;

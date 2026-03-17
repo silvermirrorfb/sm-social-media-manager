@@ -128,6 +128,57 @@ function getSystemPrompt() {
   return systemPrompt;
 }
 
+function toCleanText(value) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function truncateNicely(text, maxChars) {
+  if (!text || text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars);
+  const boundary = Math.max(
+    cut.lastIndexOf('. '),
+    cut.lastIndexOf('? '),
+    cut.lastIndexOf('! '),
+    cut.lastIndexOf('\n')
+  );
+  if (boundary > Math.floor(maxChars * 0.55)) {
+    return cut.slice(0, boundary + 1).trim();
+  }
+  return `${cut.trim().replace(/[,:;]$/, '')}…`;
+}
+
+function polishHumanTone(text, { maxChars = 420 } = {}) {
+  let output = toCleanText(text);
+  if (!output) return output;
+
+  const replacements = [
+    { pattern: /\bplease let me know if you have any other questions\b[.!]?/gi, value: 'Happy to help with anything else.' },
+    { pattern: /\bif you need any further assistance\b[.!]?/gi, value: 'If you want, I can help with that too.' },
+    { pattern: /\bas an ai\b[^.?!]*/gi, value: '' },
+    { pattern: /\bi am an ai\b[^.?!]*/gi, value: '' },
+    { pattern: /\bI apologize for any inconvenience\b[.!]?/gi, value: "I'm sorry about that." },
+    { pattern: /\bwe appreciate your patience\b[.!]?/gi, value: 'Thanks for your patience.' },
+    { pattern: /\bkindly\b/gi, value: 'please' },
+  ];
+
+  replacements.forEach(({ pattern, value }) => {
+    output = output.replace(pattern, value);
+  });
+
+  output = output
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;!?])/g, '$1')
+    .replace(/([!?]){3,}/g, '$1$1')
+    .replace(/\.\.\.+/g, '…')
+    .trim();
+
+  return truncateNicely(output, maxChars);
+}
+
 // ─── Generate a DM response ────────────────────────────────
 export async function generateDMResponse(userMessage, conversationHistory = []) {
   const messages = [
@@ -148,14 +199,17 @@ export async function generateDMResponse(userMessage, conversationHistory = []) 
     .map((block) => block.text)
     .join('\n');
 
-  return text;
+  return polishHumanTone(text, { maxChars: 420 });
 }
 
 function fallbackOutreachMessage(basePitch, contact = {}) {
   const firstName = contact.firstName || contact.name?.split(' ')[0] || '';
   const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   const pitch = String(basePitch || '').trim();
-  return `${greeting}\n\n${pitch}\n\nIf this sounds interesting, I would love to share more details.`;
+  return polishHumanTone(
+    `${greeting}\n\n${pitch}\n\nIf this sounds interesting, I'd love to share more details.`,
+    { maxChars: 500 }
+  );
 }
 
 export async function generateOutreachMessage({ basePitch, contact = {}, campaignName = '' }) {
@@ -216,7 +270,7 @@ Instructions:
       return fallbackOutreachMessage(basePitch, contact);
     }
 
-    return text.slice(0, 900);
+    return polishHumanTone(text, { maxChars: 500 });
   } catch (error) {
     console.error('[Claude] Outreach generation failed:', error?.message || error);
     return fallbackOutreachMessage(basePitch, contact);
@@ -235,9 +289,12 @@ export async function generateOutreachFollowUpMessage({
 
   const noApiKey = !getEnv('ANTHROPIC_API_KEY');
   if (noApiKey) {
-    return `${prior}\n\nFollowing up in case this got buried. ${
-      String(followUpGoal || 'Would love to connect if you are open to it.').trim()
-    }`;
+    return polishHumanTone(
+      `Just following up in case this got buried. ${
+        String(followUpGoal || 'Would love to connect if you are open to it.').trim()
+      }`,
+      { maxChars: 360 }
+    );
   }
 
   const name = contact.name || '';
@@ -285,10 +342,10 @@ Rules:
       .join('\n')
       .trim();
 
-    return text || `${prior}\n\nJust following up in case this got buried.`;
+    return polishHumanTone(text || 'Just following up in case this got buried.', { maxChars: 360 });
   } catch (error) {
     console.error('[Claude] Outreach follow-up generation failed:', error?.message || error);
-    return `${prior}\n\nJust following up in case this got buried.`;
+    return polishHumanTone('Just following up in case this got buried.', { maxChars: 360 });
   }
 }
 
@@ -364,6 +421,9 @@ Respond ONLY with the JSON object.`;
       if (!result.triggers.includes('verified_large_account')) {
         result.triggers.push('verified_large_account');
       }
+    }
+    if (result.replyText) {
+      result.replyText = polishHumanTone(result.replyText, { maxChars: 200 });
     }
     return result;
   } catch (err) {

@@ -59,6 +59,13 @@ const VIEW_LABELS = {
   escalated: 'Escalated',
 };
 
+const RANGE_LABELS = {
+  all: 'All time',
+  '24h': '24h',
+  '7d': '7d',
+  '30d': '30d',
+};
+
 const SEVERITY_ORDER = {
   high: 3,
   medium: 2,
@@ -260,13 +267,36 @@ function getTakeoverStatus(platformKey, env, entries) {
   };
 }
 
-function buildHref(platform, channel, view = 'all', q = '', thread = '') {
+function getEntryCampaign(entry) {
+  const triggerCampaign = getTriggerValue(entry.triggers, 'campaign');
+  if (triggerCampaign) return triggerCampaign;
+  const action = String(entry.action || '').toLowerCase();
+  const isOutreachLike =
+    entry.category === 'outreach' ||
+    action === 'sent' ||
+    action === 'send_failed' ||
+    action.startsWith('generated_');
+  if (!isOutreachLike) return '';
+  return entry.reason || 'manual_campaign';
+}
+
+function buildHref(
+  platform,
+  channel,
+  view = 'all',
+  q = '',
+  thread = '',
+  campaign = 'all',
+  range = 'all'
+) {
   const params = new URLSearchParams();
   params.set('platform', platform);
   if (channel && channel !== 'all') params.set('channel', channel);
   if (view && view !== 'all') params.set('view', view);
   if (q) params.set('q', q);
   if (thread) params.set('thread', thread);
+  if (campaign && campaign !== 'all') params.set('campaign', campaign);
+  if (range && range !== 'all') params.set('range', range);
   const query = params.toString();
   return query ? `/dashboard?${query}` : '/dashboard';
 }
@@ -292,6 +322,35 @@ function matchesView(entry, view) {
   if (view === 'unanswered') return !entry.botAnswered;
   if (view === 'escalated') return entry.isEscalated;
   return true;
+}
+
+function matchesRange(entry, range) {
+  if (range === 'all') return true;
+  const ts = new Date(entry.timestamp).getTime();
+  if (!Number.isFinite(ts)) return false;
+  const ageMs = Date.now() - ts;
+  if (range === '24h') return ageMs <= 24 * 60 * 60 * 1000;
+  if (range === '7d') return ageMs <= 7 * 24 * 60 * 60 * 1000;
+  if (range === '30d') return ageMs <= 30 * 24 * 60 * 60 * 1000;
+  return true;
+}
+
+function matchesCampaign(entry, selectedCampaign) {
+  if (!selectedCampaign || selectedCampaign === 'all') return true;
+  return getEntryCampaign(entry) === selectedCampaign;
+}
+
+function getCampaignFilters(entries) {
+  const counts = new Map();
+  for (const entry of entries) {
+    const name = getEntryCampaign(entry);
+    if (!name) continue;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 16);
 }
 
 function getFlagText(entry) {
@@ -481,8 +540,7 @@ function getOutreachAnalytics(entries) {
 
   for (const entry of outreachEntries) {
     const action = String(entry.action || '').toLowerCase();
-    const triggerCampaign = getTriggerValue(entry.triggers, 'campaign');
-    const campaignName = triggerCampaign || entry.reason || 'manual_campaign';
+    const campaignName = getEntryCampaign(entry) || 'manual_campaign';
 
     if (!campaigns.has(campaignName)) {
       campaigns.set(campaignName, {
@@ -571,15 +629,22 @@ export default async function DashboardPage({ searchParams }) {
     : 'instagram';
   const selectedChannel = CHANNEL_LABELS[searchParams?.channel] ? searchParams.channel : 'all';
   const selectedView = VIEW_LABELS[searchParams?.view] ? searchParams.view : 'all';
+  const selectedRange = RANGE_LABELS[searchParams?.range] ? searchParams.range : 'all';
   const search = typeof searchParams?.q === 'string' ? searchParams.q.trim() : '';
   const selectedThreadKey = typeof searchParams?.thread === 'string' ? searchParams.thread : '';
 
-  const platformEntries = entries.filter((entry) => entry.platform === selectedPlatform);
+  const platformAllEntries = entries.filter((entry) => entry.platform === selectedPlatform);
+  const platformEntries = platformAllEntries.filter((entry) => matchesRange(entry, selectedRange));
+  const campaignFilters = getCampaignFilters(platformEntries);
+  const selectedCampaign = campaignFilters.some((campaign) => campaign.name === searchParams?.campaign)
+    ? searchParams.campaign
+    : 'all';
   const channelEntries =
     selectedChannel === 'all'
       ? platformEntries
       : platformEntries.filter((entry) => entry.channel === selectedChannel);
   const visibleEntries = channelEntries
+    .filter((entry) => matchesCampaign(entry, selectedCampaign))
     .filter((entry) => matchesView(entry, selectedView))
     .filter((entry) => matchesSearch(entry, search));
 
@@ -591,7 +656,7 @@ export default async function DashboardPage({ searchParams }) {
   const summary = buildSummary(platformEntries);
   const selectedPlatformConfig =
     PLATFORMS.find((platform) => platform.key === selectedPlatform) || PLATFORMS[0];
-  const takeoverStatus = getTakeoverStatus(selectedPlatform, env, platformEntries);
+  const takeoverStatus = getTakeoverStatus(selectedPlatform, env, platformAllEntries);
   const topQueue = getTopQueue(platformEntries);
   const volumeByChannel = getVolumeByChannel(platformEntries);
   const analytics = getAnalytics(platformEntries);
@@ -654,7 +719,7 @@ export default async function DashboardPage({ searchParams }) {
             {PLATFORMS.map((platform) => (
               <Link
                 key={platform.key}
-                href={buildHref(platform.key, 'all', 'all', '')}
+                href={buildHref(platform.key, 'all', 'all', '', '', 'all', selectedRange)}
                 className={`${styles.platformCard} ${
                   selectedPlatform === platform.key ? styles.platformCardActive : ''
                 }`}
@@ -679,7 +744,15 @@ export default async function DashboardPage({ searchParams }) {
                 {Object.entries(CHANNEL_LABELS).map(([channelKey, label]) => (
                   <Link
                     key={channelKey}
-                    href={buildHref(selectedPlatform, channelKey, selectedView, search, selectedThread?.key || '')}
+                    href={buildHref(
+                      selectedPlatform,
+                      channelKey,
+                      selectedView,
+                      search,
+                      selectedThread?.key || '',
+                      selectedCampaign,
+                      selectedRange
+                    )}
                     className={`${styles.channelPill} ${
                       selectedChannel === channelKey ? styles.channelPillActive : ''
                     }`}
@@ -687,6 +760,27 @@ export default async function DashboardPage({ searchParams }) {
                     {label}
                     {' · '}
                     <strong>{channelCounts[channelKey] || 0}</strong>
+                  </Link>
+                ))}
+              </div>
+              <div className={styles.viewPills}>
+                {Object.entries(RANGE_LABELS).map(([rangeKey, label]) => (
+                  <Link
+                    key={rangeKey}
+                    href={buildHref(
+                      selectedPlatform,
+                      selectedChannel,
+                      selectedView,
+                      search,
+                      selectedThread?.key || '',
+                      selectedCampaign,
+                      rangeKey
+                    )}
+                    className={`${styles.channelPill} ${
+                      selectedRange === rangeKey ? styles.channelPillActive : ''
+                    }`}
+                  >
+                    {label}
                   </Link>
                 ))}
               </div>
@@ -924,7 +1018,21 @@ export default async function DashboardPage({ searchParams }) {
                     <tbody>
                       {outreach.campaigns.map((campaign) => (
                         <tr key={campaign.name}>
-                          <td>{campaign.name}</td>
+                          <td>
+                            <Link
+                              href={buildHref(
+                                selectedPlatform,
+                                'all',
+                                'all',
+                                '',
+                                '',
+                                campaign.name,
+                                selectedRange
+                              )}
+                            >
+                              {campaign.name}
+                            </Link>
+                          </td>
                           <td>{campaign.generatedDrafts}</td>
                           <td>{campaign.generatedFollowUps}</td>
                           <td>{campaign.sent}</td>
@@ -953,6 +1061,8 @@ export default async function DashboardPage({ searchParams }) {
               <input type="hidden" name="platform" value={selectedPlatform} />
               {selectedChannel !== 'all' ? <input type="hidden" name="channel" value={selectedChannel} /> : null}
               {selectedView !== 'all' ? <input type="hidden" name="view" value={selectedView} /> : null}
+              {selectedCampaign !== 'all' ? <input type="hidden" name="campaign" value={selectedCampaign} /> : null}
+              {selectedRange !== 'all' ? <input type="hidden" name="range" value={selectedRange} /> : null}
               <input
                 className={styles.searchInput}
                 type="search"
@@ -970,13 +1080,59 @@ export default async function DashboardPage({ searchParams }) {
             {Object.entries(VIEW_LABELS).map(([viewKey, label]) => (
               <Link
                 key={viewKey}
-                href={buildHref(selectedPlatform, selectedChannel, viewKey, search, selectedThread?.key || '')}
+                href={buildHref(
+                  selectedPlatform,
+                  selectedChannel,
+                  viewKey,
+                  search,
+                  selectedThread?.key || '',
+                  selectedCampaign,
+                  selectedRange
+                )}
                 className={`${styles.channelPill} ${selectedView === viewKey ? styles.channelPillActive : ''}`}
               >
                 {label}
               </Link>
             ))}
           </div>
+
+          {campaignFilters.length > 0 ? (
+            <div className={styles.viewPills}>
+              <Link
+                href={buildHref(
+                  selectedPlatform,
+                  selectedChannel,
+                  selectedView,
+                  search,
+                  selectedThread?.key || '',
+                  'all',
+                  selectedRange
+                )}
+                className={`${styles.channelPill} ${selectedCampaign === 'all' ? styles.channelPillActive : ''}`}
+              >
+                All campaigns
+              </Link>
+              {campaignFilters.map((campaign) => (
+                <Link
+                  key={campaign.name}
+                  href={buildHref(
+                    selectedPlatform,
+                    selectedChannel,
+                    selectedView,
+                    search,
+                    selectedThread?.key || '',
+                    campaign.name,
+                    selectedRange
+                  )}
+                  className={`${styles.channelPill} ${
+                    selectedCampaign === campaign.name ? styles.channelPillActive : ''
+                  }`}
+                >
+                  {campaign.name} {' · '} <strong>{campaign.count}</strong>
+                </Link>
+              ))}
+            </div>
+          ) : null}
 
           {visibleEntries.length === 0 ? (
             <div className={styles.emptyState}>
@@ -991,7 +1147,15 @@ export default async function DashboardPage({ searchParams }) {
                   {visibleThreads.map((thread) => (
                     <Link
                       key={thread.key}
-                      href={buildHref(selectedPlatform, selectedChannel, selectedView, search, thread.key)}
+                      href={buildHref(
+                        selectedPlatform,
+                        selectedChannel,
+                        selectedView,
+                        search,
+                        thread.key,
+                        selectedCampaign,
+                        selectedRange
+                      )}
                       className={`${styles.threadCard} ${selectedThread?.key === thread.key ? styles.threadCardActive : ''}`}
                     >
                       <div className={styles.threadHeader}>

@@ -1,5 +1,38 @@
 # Live Handoff Log
 
+## 2026-03-17 08:03 ET
+
+### Completed
+- Added campaign filter to dashboard workspace and logs:
+  - query param: `campaign`
+  - campaign pills now appear in Conversation Workspace when outreach campaigns are present
+  - campaign names in Outreach performance table are clickable filter shortcuts
+- Added time-range filtering on dashboard:
+  - query param: `range` (`all`, `24h`, `7d`, `30d`)
+  - range pills added in Overview panel
+- Improved outreach send reliability:
+  - retry/backoff for transient send failures (429/5xx/network-like)
+  - send logs now include attempt count in triggers
+- Improved bot human tone:
+  - added response tone polishing/cleanup in `claude.js` for DM replies, outreach drafts, follow-ups, and comment replies
+  - improved common smart-router phrasing variety in `dm-smart-router.js`
+  - refined hardcoded non-text DM responses and escalation wording in IG/FB DM handlers
+  - expanded system prompt with explicit human voice style guardrails
+
+### QA
+- `npm run build` passed after all changes.
+- Production smoke checks:
+  - `/api/health` = 200 OK
+  - `/dashboard` = 307 to login
+  - `/dashboard/outreach` = 307 to login
+  - `/dashboard/api/outreach/generate` = 401 when unauthenticated
+  - `/dashboard/api/outreach/followup` = 401 when unauthenticated
+  - `/dashboard/api/outreach/send` = 401 when unauthenticated
+  - `/api/instagram/webhook` verify with wrong token = 403 (expected)
+
+### Note
+- `npm run lint` could not be executed non-interactively because Next.js prompted for first-time ESLint setup (no existing lint config committed yet).
+
 ## 2026-03-17 07:09 ET
 
 ### Completed

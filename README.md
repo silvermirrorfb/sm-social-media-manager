@@ -61,6 +61,14 @@ See `.env.example` for the complete list. Key groups:
 - Save and reuse campaign templates (pitch + defaults)
 - Apply segment-based selection (sendable, failed, platform, custom query)
 - Generate follow-up drafts for selected recipients
-- Retry failed live sends in one click
+- Retry failed live sends in one click (with transient retry/backoff on API sends)
 - Live send for Instagram/Facebook rows with `recipient_id`
 - Export/copy drafts for manual channels (including TikTok draft mode)
+
+## Dashboard ops filters
+
+- Platform tabs: Instagram, Facebook, TikTok
+- Channel filters: all, DMs, comments, system
+- View filters: all, needs review, unanswered, escalated
+- Range filters: all time, 24h, 7d, 30d
+- Campaign filters: appears automatically when outreach campaign logs are present

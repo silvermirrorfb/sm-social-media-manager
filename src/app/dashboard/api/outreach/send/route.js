@@ -5,6 +5,8 @@ import { logToSheet } from '@/lib/sheets';
 import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboard-auth';
 
 const MAX_SEND_BATCH = 60;
+const MAX_SEND_ATTEMPTS = 3;
+const BASE_BACKOFF_MS = 350;
 
 function normalizePlatform(raw) {
   const value = String(raw || '').trim().toLowerCase();
@@ -20,6 +22,40 @@ async function sendToPlatform({ platform, recipientId, message }) {
     return sendMessengerMessage(recipientId, message);
   }
   throw new Error('TikTok outbound sending is not enabled in this app yet.');
+}
+
+function shouldRetrySend(error) {
+  const message = String(error?.message || '');
+  return (
+    /429/.test(message) ||
+    /50\d/.test(message) ||
+    /timeout/i.test(message) ||
+    /network/i.test(message) ||
+    /fetch failed/i.test(message)
+  );
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendToPlatformWithRetry(payload) {
+  let attempt = 0;
+  while (attempt < MAX_SEND_ATTEMPTS) {
+    attempt += 1;
+    try {
+      await sendToPlatform(payload);
+      return { attempt };
+    } catch (error) {
+      const isLastAttempt = attempt >= MAX_SEND_ATTEMPTS;
+      if (isLastAttempt || !shouldRetrySend(error)) {
+        const baseMessage = error instanceof Error ? error.message : 'send_failed';
+        throw new Error(`${baseMessage} (attempt ${attempt}/${MAX_SEND_ATTEMPTS})`);
+      }
+      await wait(BASE_BACKOFF_MS * attempt);
+    }
+  }
+  throw new Error('send_failed');
 }
 
 export async function POST(request) {
@@ -77,8 +113,8 @@ export async function POST(request) {
       }
 
       try {
-        await sendToPlatform({ platform, recipientId, message });
-        const successResult = { ...baseResult, status: 'sent', reason: '' };
+        const { attempt } = await sendToPlatformWithRetry({ platform, recipientId, message });
+        const successResult = { ...baseResult, status: 'sent', reason: '', attempts: attempt };
         results.push(successResult);
 
         await logToSheet({
@@ -91,7 +127,7 @@ export async function POST(request) {
           reason: campaignName,
           confidence: '',
           severity: '',
-          triggers: `campaign:${campaignName};platform:${platform}`,
+          triggers: `campaign:${campaignName};platform:${platform};attempts:${attempt}`,
           needsReview: '',
         }).catch(() => {});
       } catch (error) {

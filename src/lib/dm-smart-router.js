@@ -12,6 +12,15 @@ function normalize(text) {
   return String(text || '').trim().toLowerCase();
 }
 
+function pickVariant(seedText, options) {
+  if (!Array.isArray(options) || options.length === 0) return '';
+  const seed = String(seedText || '');
+  const hash = seed
+    .split('')
+    .reduce((acc, char, index) => (acc + char.charCodeAt(0) * (index + 1)) % 10007, 0);
+  return options[hash % options.length];
+}
+
 function hasAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
@@ -61,7 +70,11 @@ export function getSmartDMResponse(messageText) {
   if (!text) return null;
 
   if (/^(hi|hey|hello|yo|good morning|good afternoon|good evening)[!. ]*$/.test(text)) {
-    return 'Hey! Thanks for reaching out to Silver Mirror ✨ What can I help with?';
+    return pickVariant(text, [
+      'Hey! Thanks for reaching out to Silver Mirror ✨ What can I help with?',
+      'Hi there! So glad you messaged us. What can I help you with today?',
+      'Hey! Happy to help. What are you looking for?',
+    ]);
   }
 
   if (hasAny(text, [/(botox|filler|injectable|waxing|massage|laser|microblading|lash)/])) {
@@ -70,17 +83,29 @@ export function getSmartDMResponse(messageText) {
 
   if (hasAny(text, [/(book|booking|availability|available|appointment|appt|today|tomorrow|this week)/])) {
     if (location) {
-      return `The quickest way is to check live availability here: ${BOOKING_URL}.${getLocationLine(location)} If you want help choosing the right facial, I can help with that too.`;
+      return pickVariant(text, [
+        `The quickest way is to check live availability here: ${BOOKING_URL}.${getLocationLine(location)} If you want help choosing the right facial, I can help with that too.`,
+        `You can book instantly here: ${BOOKING_URL}.${getLocationLine(location)} If you want, I can recommend the best facial before you book.`,
+      ]);
     }
-    return `The quickest way is to check live availability and book here: ${BOOKING_URL}. If you want, tell me your location and skin goals and I'll help narrow it down.`;
+    return pickVariant(text, [
+      `The quickest way is to check live availability and book here: ${BOOKING_URL}. If you want, tell me your location and skin goals and I'll help narrow it down.`,
+      `You can see real-time openings and book here: ${BOOKING_URL}. Share your location + skin goals and I can point you to the best option.`,
+    ]);
   }
 
   if (hasAny(text, [/(price|pricing|cost|how much)/])) {
-    return `30-minute facials start at $119, and 50-minute facials start at $169. Members receive lower pricing too. The full menu is here: ${SERVICES_URL}`;
+    return pickVariant(text, [
+      `30-minute facials start at $119, and 50-minute facials start at $169. Members receive lower pricing too. Full menu: ${SERVICES_URL}`,
+      `Pricing starts at $119 for 30 minutes and $169 for 50 minutes. Members receive lower rates. Full menu: ${SERVICES_URL}`,
+    ]);
   }
 
   if (hasAny(text, [/(membership|member|cancel|pause|billing|credit|freeze)/])) {
-    return `For membership help, email ${CONTACTS.memberships.email} or call ${CONTACTS.memberships.phone}. You can also use the FAQ here: ${CONTACTS.memberships.faqUrl}`;
+    return pickVariant(text, [
+      `For membership help, email ${CONTACTS.memberships.email} or call ${CONTACTS.memberships.phone}. You can also use the FAQ here: ${CONTACTS.memberships.faqUrl}`,
+      `For membership questions (cancel, pause, billing, credits), email ${CONTACTS.memberships.email} or call ${CONTACTS.memberships.phone}. FAQ: ${CONTACTS.memberships.faqUrl}`,
+    ]);
   }
 
   if (hasAny(text, [/(gift ?card)/])) {
