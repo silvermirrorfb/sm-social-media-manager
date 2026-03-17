@@ -6,6 +6,15 @@ import styles from './outreach.module.css';
 
 const SAMPLE_HEADERS = 'platform,username,name,first_name,recipient_id,notes,email';
 const LOCAL_TEMPLATE_KEY = 'sm_outreach_templates_v1';
+const SOFT_MESSAGE_WARNING_CHARS = 380;
+const HARD_MESSAGE_LIMIT_CHARS = 900;
+const GENERIC_OUTREACH_PATTERNS = [
+  /\bhope you(?:'re| are) well\b/i,
+  /\bjust reaching out\b/i,
+  /\bcircling back\b/i,
+  /\bbumping this\b/i,
+  /\bin case this got buried\b/i,
+];
 
 function normalizePlatform(value, fallback = 'instagram') {
   const normalized = String(value || fallback).trim().toLowerCase();
@@ -97,13 +106,14 @@ function toContact(row, headerMap, index, defaultPlatform) {
 
   const username = fromMap('username') || (singleCell.startsWith('@') ? inferredUsername : '');
   const name = fromMap('name') || (!singleCell.startsWith('@') ? singleCell : '');
+  const firstName = fromMap('firstName') || (name ? name.split(' ')[0] : '');
 
   return {
     id: `${Date.now()}-${index}`,
     platform,
     username,
     name,
-    firstName: fromMap('firstName'),
+    firstName,
     recipientId: fromMap('recipientId'),
     notes: fromMap('notes'),
     email: fromMap('email'),
@@ -138,6 +148,95 @@ function parseContacts(rawText, defaultPlatform) {
   }
 
   return contacts;
+}
+
+function getContactIdentityKey(contact) {
+  const platform = normalizePlatform(contact.platform, 'instagram');
+  if (contact.recipientId) return `${platform}:recipient:${String(contact.recipientId).toLowerCase()}`;
+  if (contact.username) return `${platform}:username:${String(contact.username).toLowerCase()}`;
+  if (contact.email) return `${platform}:email:${String(contact.email).toLowerCase()}`;
+  if (contact.name) return `${platform}:name:${String(contact.name).toLowerCase()}`;
+  return `${platform}:id:${contact.id}`;
+}
+
+function dedupeContacts(inputContacts = []) {
+  const seen = new Map();
+  const deduped = [];
+  let duplicatesRemoved = 0;
+
+  inputContacts.forEach((contact) => {
+    const key = getContactIdentityKey(contact);
+    if (seen.has(key)) {
+      duplicatesRemoved += 1;
+      return;
+    }
+    seen.set(key, true);
+    deduped.push(contact);
+  });
+
+  return { contacts: deduped, duplicatesRemoved };
+}
+
+function canSendDraftNow(item) {
+  return Boolean(
+    item?.canSendNow &&
+    String(item?.message || '').trim() &&
+    String(item?.message || '').trim().length <= HARD_MESSAGE_LIMIT_CHARS &&
+    item?.status !== 'sent'
+  );
+}
+
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getPreferredDraftName(item) {
+  return String(item?.firstName || item?.name || '')
+    .trim()
+    .split(/\s+/)[0];
+}
+
+function getDraftReviewFlags(item) {
+  const flags = [];
+  const message = String(item?.message || '').trim();
+  const platform = normalizePlatform(item?.platform, 'instagram');
+  const preferredName = getPreferredDraftName(item);
+
+  if (!message) {
+    flags.push('Missing message');
+    return flags;
+  }
+
+  if (message.length > HARD_MESSAGE_LIMIT_CHARS) {
+    flags.push('Over live-send limit');
+  } else if (message.length > SOFT_MESSAGE_WARNING_CHARS) {
+    flags.push('Long for DM');
+  }
+
+  if (GENERIC_OUTREACH_PATTERNS.some((pattern) => pattern.test(message))) {
+    flags.push('Generic phrasing');
+  }
+
+  if (preferredName) {
+    const namePattern = new RegExp(`\\b${escapeRegex(preferredName)}\\b`, 'i');
+    if (!namePattern.test(message)) {
+      flags.push('Missing name personalization');
+    }
+  }
+
+  if ((platform === 'instagram' || platform === 'facebook') && !item?.recipientId) {
+    flags.push('Missing recipient ID');
+  }
+
+  if (platform === 'tiktok') {
+    flags.push('TikTok draft only');
+  }
+
+  if (item?.status === 'failed') {
+    flags.push('Retry or edit before resend');
+  }
+
+  return flags;
 }
 
 function statusClass(status) {
@@ -175,6 +274,7 @@ export default function OutreachPage() {
   const [segmentQuery, setSegmentQuery] = useState('');
   const [followUpGoal, setFollowUpGoal] = useState('Quick nudge and invite them to reply if interested.');
   const [followUpNumber, setFollowUpNumber] = useState(1);
+  const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
     try {
@@ -198,14 +298,14 @@ export default function OutreachPage() {
   }, [savedTemplates]);
 
   const sendableDrafts = useMemo(
-    () => drafts.filter((item) => item.canSendNow),
+    () => drafts.filter((item) => canSendDraftNow(item)),
     [drafts]
   );
 
   const selectedSendableCount = useMemo(() => {
     let count = 0;
     drafts.forEach((item) => {
-      if (item.canSendNow && selectedIds.has(item.id)) count += 1;
+      if (canSendDraftNow(item) && selectedIds.has(item.id)) count += 1;
     });
     return count;
   }, [drafts, selectedIds]);
@@ -219,9 +319,70 @@ export default function OutreachPage() {
   }, [drafts, selectedIds]);
 
   const failedSendableCount = useMemo(
-    () => drafts.filter((item) => item.status === 'failed' && item.canSendNow).length,
+    () => drafts.filter((item) => item.status === 'failed' && canSendDraftNow(item)).length,
     [drafts]
   );
+
+  const draftReviewMap = useMemo(() => {
+    const map = new Map();
+    drafts.forEach((item) => {
+      map.set(item.id, getDraftReviewFlags(item));
+    });
+    return map;
+  }, [drafts]);
+
+  const selectedDrafts = useMemo(
+    () => drafts.filter((item) => selectedIds.has(item.id)),
+    [drafts, selectedIds]
+  );
+
+  const selectedIneligibleCount = useMemo(
+    () => selectedDrafts.filter((item) => !canSendDraftNow(item)).length,
+    [selectedDrafts]
+  );
+
+  const selectedReviewCount = useMemo(
+    () => selectedDrafts.filter((item) => (draftReviewMap.get(item.id) || []).length > 0).length,
+    [draftReviewMap, selectedDrafts]
+  );
+
+  const contactDiagnostics = useMemo(() => {
+    const summary = {
+      instagram: 0,
+      facebook: 0,
+      tiktok: 0,
+      liveReady: 0,
+      draftOnly: 0,
+    };
+
+    contacts.forEach((contact) => {
+      summary[contact.platform] += 1;
+      if (
+        contact.recipientId &&
+        (contact.platform === 'instagram' || contact.platform === 'facebook')
+      ) {
+        summary.liveReady += 1;
+      } else {
+        summary.draftOnly += 1;
+      }
+    });
+
+    return summary;
+  }, [contacts]);
+
+  const draftDiagnostics = useMemo(() => {
+    return drafts.reduce(
+      (acc, item) => {
+        if (item.status === 'sent') acc.sent += 1;
+        if (item.status === 'failed') acc.failed += 1;
+        if (!item.canSendNow) acc.draftOnly += 1;
+        if (String(item.message || '').length > SOFT_MESSAGE_WARNING_CHARS) acc.long += 1;
+        if ((draftReviewMap.get(item.id) || []).length > 0) acc.review += 1;
+        return acc;
+      },
+      { sent: 0, failed: 0, draftOnly: 0, long: 0, review: 0 }
+    );
+  }, [draftReviewMap, drafts]);
 
   const activeTemplate = useMemo(
     () => savedTemplates.find((item) => item.id === selectedTemplateId) || null,
@@ -230,7 +391,7 @@ export default function OutreachPage() {
 
   function buildSendItemsFromDrafts(sourceDrafts) {
     return sourceDrafts
-      .filter((item) => item.canSendNow)
+      .filter((item) => canSendDraftNow(item))
       .map((item) => ({
         id: item.id,
         platform: item.platform,
@@ -238,19 +399,25 @@ export default function OutreachPage() {
         username: item.username,
         name: item.name,
         message: item.message,
+        status: item.status,
       }));
   }
 
   function handleParse() {
     setIsParsing(true);
     setErrorMessage('');
+    setStatusMessage('');
 
     try {
       const parsed = parseContacts(rawContacts, defaultPlatform);
-      setContacts(parsed);
+      const deduped = dedupeContacts(parsed);
+      setContacts(deduped.contacts);
       setDrafts([]);
       setSelectedIds(new Set());
       setSendSummary(null);
+      if (deduped.duplicatesRemoved > 0) {
+        setStatusMessage(`Removed ${deduped.duplicatesRemoved} duplicate contact row(s) during import.`);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to parse CSV.');
     } finally {
@@ -267,6 +434,7 @@ export default function OutreachPage() {
 
   async function handleGenerate() {
     setErrorMessage('');
+    setStatusMessage('');
     setIsGenerating(true);
     setSendSummary(null);
 
@@ -289,10 +457,19 @@ export default function OutreachPage() {
 
       setDrafts(payload.results || []);
       const nextSelected = new Set();
-      (payload.results || []).forEach((item) => {
-        if (item.canSendNow) nextSelected.add(item.id);
+      const generatedResults = payload.results || [];
+      generatedResults.forEach((item) => {
+        if (canSendDraftNow(item)) nextSelected.add(item.id);
       });
       setSelectedIds(nextSelected);
+      if (generatedResults.length > 0) {
+        const reviewCount = generatedResults.filter((item) => getDraftReviewFlags(item).length > 0).length;
+        if (reviewCount > 0) {
+          setStatusMessage(`Generated ${generatedResults.length} draft(s). ${reviewCount} should be reviewed before live send.`);
+        } else {
+          setStatusMessage(`Generated ${generatedResults.length} draft(s). Everything looks send-ready.`);
+        }
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Draft generation failed.');
     } finally {
@@ -339,6 +516,15 @@ export default function OutreachPage() {
           };
         })
       );
+      if (payload.failedCount > 0 && payload.skippedCount > 0) {
+        setStatusMessage(`Sent ${payload.sentCount}. ${payload.failedCount} failed and ${payload.skippedCount} were skipped.`);
+      } else if (payload.failedCount > 0) {
+        setStatusMessage(`Sent ${payload.sentCount}. ${payload.failedCount} still need attention.`);
+      } else if (payload.skippedCount > 0) {
+        setStatusMessage(`Sent ${payload.sentCount}. Skipped ${payload.skippedCount} row(s) that were not live-send eligible.`);
+      } else {
+        setStatusMessage(`Sent ${payload.sentCount} outreach message(s).`);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Bulk send failed.');
     } finally {
@@ -347,7 +533,17 @@ export default function OutreachPage() {
   }
 
   async function handleSendSelected() {
-    const items = buildSendItemsFromDrafts(drafts.filter((item) => selectedIds.has(item.id)));
+    const items = buildSendItemsFromDrafts(selectedDrafts);
+    if (selectedIneligibleCount > 0 || selectedReviewCount > 0) {
+      const details = [];
+      if (selectedIneligibleCount > 0) {
+        details.push(`${selectedIneligibleCount} selected row(s) are not live-send eligible`);
+      }
+      if (selectedReviewCount > 0) {
+        details.push(`${selectedReviewCount} selected row(s) still have review flags`);
+      }
+      setStatusMessage(`Sending ${items.length} eligible draft(s). ${details.join('. ')}.`);
+    }
     await sendItems(items);
   }
 
@@ -401,8 +597,9 @@ export default function OutreachPage() {
 
       const matchesCustom = query && haystack.includes(query);
       if (mode === 'all') next.add(item.id);
-      if (mode === 'sendable' && item.canSendNow) next.add(item.id);
+      if (mode === 'sendable' && canSendDraftNow(item)) next.add(item.id);
       if (mode === 'failed' && item.status === 'failed') next.add(item.id);
+      if (mode === 'review' && (draftReviewMap.get(item.id) || []).length > 0) next.add(item.id);
       if (mode === 'instagram' && item.platform === 'instagram') next.add(item.id);
       if (mode === 'facebook' && item.platform === 'facebook') next.add(item.id);
       if (mode === 'tiktok' && item.platform === 'tiktok') next.add(item.id);
@@ -413,6 +610,7 @@ export default function OutreachPage() {
 
   async function generateFollowUpForSelected() {
     setErrorMessage('');
+    setStatusMessage('');
     setIsGenerating(true);
 
     try {
@@ -439,6 +637,7 @@ export default function OutreachPage() {
 
       const map = new Map((payload.results || []).map((item) => [item.id, item]));
       setDrafts((current) => current.map((draft) => map.get(draft.id) || draft));
+      setStatusMessage(`Generated follow-up #${followUpNumber} for ${items.length} selected draft(s).`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Follow-up generation failed.');
     } finally {
@@ -447,7 +646,7 @@ export default function OutreachPage() {
   }
 
   async function retryFailedSends() {
-    const failedDrafts = drafts.filter((item) => item.status === 'failed' && item.canSendNow);
+    const failedDrafts = drafts.filter((item) => item.status === 'failed' && canSendDraftNow(item));
     if (failedDrafts.length === 0) {
       setErrorMessage('No failed sendable drafts to retry.');
       return;
@@ -458,7 +657,8 @@ export default function OutreachPage() {
   }
 
   async function copyDraftsToClipboard() {
-    const text = drafts
+    const activeDrafts = selectedDraftCount > 0 ? selectedDrafts : drafts;
+    const text = activeDrafts
       .map((item) => {
         const who = item.username ? `@${item.username}` : item.name || item.recipientId || 'contact';
         return `${who}\n${item.message}\n`;
@@ -466,12 +666,14 @@ export default function OutreachPage() {
       .join('\n');
 
     await navigator.clipboard.writeText(text);
+    setStatusMessage(`Copied ${activeDrafts.length} draft(s) to the clipboard.`);
   }
 
   function downloadDraftCsv() {
+    const activeDrafts = selectedDraftCount > 0 ? selectedDrafts : drafts;
     const lines = [
       ['platform', 'username', 'name', 'first_name', 'recipient_id', 'email', 'notes', 'message', 'status', 'send_reason'],
-      ...drafts.map((item) => [
+      ...activeDrafts.map((item) => [
         item.platform,
         item.username,
         item.name,
@@ -493,6 +695,7 @@ export default function OutreachPage() {
     anchor.download = `outreach-${Date.now()}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+    setStatusMessage(`Exported ${activeDrafts.length} draft row(s).`);
   }
 
   return (
@@ -653,6 +856,29 @@ export default function OutreachPage() {
                 style={{ display: 'none' }}
               />
             </div>
+
+            <div className={styles.stats}>
+              <div className={styles.stat}>
+                <div className={styles.statLabel}>Instagram rows</div>
+                <div className={styles.statValue}>{contactDiagnostics.instagram}</div>
+              </div>
+              <div className={styles.stat}>
+                <div className={styles.statLabel}>Facebook rows</div>
+                <div className={styles.statValue}>{contactDiagnostics.facebook}</div>
+              </div>
+              <div className={styles.stat}>
+                <div className={styles.statLabel}>TikTok rows</div>
+                <div className={styles.statValue}>{contactDiagnostics.tiktok}</div>
+              </div>
+              <div className={styles.stat}>
+                <div className={styles.statLabel}>Live-send ready</div>
+                <div className={styles.statValue}>{contactDiagnostics.liveReady}</div>
+              </div>
+              <div className={styles.stat}>
+                <div className={styles.statLabel}>Draft only</div>
+                <div className={styles.statValue}>{contactDiagnostics.draftOnly}</div>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -673,7 +899,7 @@ export default function OutreachPage() {
               onClick={copyDraftsToClipboard}
               disabled={drafts.length === 0}
             >
-              Copy Drafts
+              {selectedDraftCount > 0 ? `Copy Selected (${selectedDraftCount})` : 'Copy Drafts'}
             </button>
             <button
               type="button"
@@ -681,7 +907,7 @@ export default function OutreachPage() {
               onClick={downloadDraftCsv}
               disabled={drafts.length === 0}
             >
-              Export Draft CSV
+              {selectedDraftCount > 0 ? `Export Selected (${selectedDraftCount})` : 'Export Draft CSV'}
             </button>
             <button
               type="button"
@@ -711,9 +937,9 @@ export default function OutreachPage() {
               </p>
             </div>
             <div className={styles.focusTile}>
-              <span className={styles.statLabel}>Send path</span>
-              <strong className={styles.focusValue}>Instagram + Facebook live</strong>
-              <p className={styles.subtle}>TikTok stays in draft/export mode until direct outbound is approved.</p>
+              <span className={styles.statLabel}>Review first</span>
+              <strong className={styles.focusValue}>{draftDiagnostics.review} drafts flagged</strong>
+              <p className={styles.subtle}>Use this as the final human QA pass before anything goes out live.</p>
             </div>
           </div>
 
@@ -726,6 +952,9 @@ export default function OutreachPage() {
             </button>
             <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('failed')}>
               Select Failed
+            </button>
+            <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('review')}>
+              Needs Review
             </button>
             <button type="button" className={styles.chipButton} onClick={() => setSelectionBySegment('instagram')}>
               Instagram
@@ -837,12 +1066,35 @@ export default function OutreachPage() {
               <div className={styles.statLabel}>Selected Drafts</div>
               <div className={styles.statValue}>{selectedDraftCount}</div>
             </div>
+            <div className={styles.stat}>
+              <div className={styles.statLabel}>Already Sent</div>
+              <div className={styles.statValue}>{draftDiagnostics.sent}</div>
+            </div>
+            <div className={styles.stat}>
+              <div className={styles.statLabel}>Review First</div>
+              <div className={styles.statValue}>{draftDiagnostics.review}</div>
+            </div>
+            <div className={styles.stat}>
+              <div className={styles.statLabel}>Long drafts</div>
+              <div className={styles.statValue}>{draftDiagnostics.long}</div>
+            </div>
           </div>
 
           {errorMessage ? <div className={styles.warning} style={{ marginTop: 12 }}>{errorMessage}</div> : null}
+          {statusMessage ? <div className={styles.notice} style={{ marginTop: 12 }}>{statusMessage}</div> : null}
           {sendSummary ? (
             <div className={styles.warning} style={{ marginTop: 12 }}>
               Send complete: {sendSummary.sentCount} sent, {sendSummary.failedCount} failed, {sendSummary.skippedCount} skipped.
+            </div>
+          ) : null}
+          {selectedIneligibleCount > 0 ? (
+            <div className={styles.notice} style={{ marginTop: 12 }}>
+              {selectedIneligibleCount} selected row(s) are not live-send eligible right now. They still stay available for copy, export, or follow-up drafting.
+            </div>
+          ) : null}
+          {selectedReviewCount > 0 ? (
+            <div className={styles.warning} style={{ marginTop: 12 }}>
+              {selectedReviewCount} selected row(s) still have review flags. We should clean those up before sending live.
             </div>
           ) : null}
         </section>
@@ -897,11 +1149,14 @@ export default function OutreachPage() {
                     <th>Recipient ID</th>
                     <th>Message</th>
                     <th>Reason</th>
+                    <th>Review flags</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {drafts.map((item) => (
-                    <tr key={item.id}>
+                  {drafts.map((item) => {
+                    const reviewFlags = draftReviewMap.get(item.id) || [];
+                    return (
+                    <tr key={item.id} className={reviewFlags.length > 0 ? styles.rowNeedsReview : ''}>
                       <td>
                         <input
                           type="checkbox"
@@ -924,10 +1179,44 @@ export default function OutreachPage() {
                       <td>{item.platform}</td>
                       <td>{item.username ? `@${item.username}` : (item.name || item.email || 'Unknown')}</td>
                       <td className={styles.mono}>{item.recipientId || ''}</td>
-                      <td>{item.message}</td>
+                      <td>
+                        <textarea
+                          className={styles.messageEditor}
+                          value={item.message}
+                          onChange={(event) => {
+                            const nextMessage = event.target.value;
+                            setDrafts((current) =>
+                              current.map((draft) =>
+                                draft.id === item.id ? { ...draft, message: nextMessage } : draft
+                              )
+                            );
+                          }}
+                        />
+                        <div className={styles.messageMeta}>
+                          <span>{String(item.message || '').length} chars</span>
+                          {String(item.message || '').length > HARD_MESSAGE_LIMIT_CHARS ? (
+                            <span className={styles.messageWarn}>Over the live-send limit.</span>
+                          ) : String(item.message || '').length > SOFT_MESSAGE_WARNING_CHARS ? (
+                            <span className={styles.messageWarn}>Trim this before sending live.</span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td>{item.sendReason || (item.canSendNow ? 'ready_to_send' : 'draft_only_or_missing_recipient_id')}</td>
+                      <td>
+                        {reviewFlags.length === 0 ? (
+                          <span className={styles.flagEmpty}>Looks good</span>
+                        ) : (
+                          <div className={styles.flagList}>
+                            {reviewFlags.map((flag) => (
+                              <span key={`${item.id}-${flag}`} className={styles.flagPill}>
+                                {flag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

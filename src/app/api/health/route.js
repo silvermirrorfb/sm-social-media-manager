@@ -18,6 +18,12 @@ export async function GET() {
   const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
   const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
   const hasTikTokClientSecret = hasEnv('TIKTOK_CLIENT_SECRET');
+  const hasEmailAlerts =
+    hasEnv('SMTP_HOST') &&
+    hasEnv('SMTP_PORT') &&
+    hasEnv('SMTP_USER') &&
+    hasEnv('SMTP_PASS') &&
+    hasEnv('SMTP_FROM', 'SMTP_USER');
 
   return NextResponse.json({
     status: 'ok',
@@ -40,6 +46,7 @@ export async function GET() {
       hasTikTokClientSecret,
       tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
       hasTikTokSessionCrypto: hasTikTokSessionCrypto(),
+      hasEmailAlerts,
     },
   });
 }

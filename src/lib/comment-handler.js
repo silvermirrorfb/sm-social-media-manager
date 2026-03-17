@@ -16,6 +16,54 @@ import {
   serializeModerationTriggers,
   shouldEscalateRepeatSpammer,
 } from './comment-moderation';
+import { ESCALATION_CONTACTS } from './moderation-policy';
+import { sendEmail } from './email';
+
+async function sendRepeatSpamAlert({
+  platform,
+  username,
+  commentId,
+  commentText,
+  spamCount,
+  triggers,
+  reason,
+}) {
+  const recipient = ESCALATION_CONTACTS.socialMediaManager?.email || 'sierra.case@silvermirror.com';
+  const safeComment = String(commentText || '(empty)')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const result = await sendEmail({
+    to: recipient,
+    subject: `[Silver Mirror Moderation] Repeat spam offender on ${platform}`,
+    text: [
+      `A repeat spam offender hit the moderation threshold on ${platform}.`,
+      '',
+      `Username: @${username}`,
+      `Comment ID: ${commentId}`,
+      `Spam count: ${spamCount}`,
+      `Triggers: ${(triggers || []).join(', ') || 'none'}`,
+      `Reason: ${reason || 'repeat spam threshold reached'}`,
+      '',
+      'Latest comment:',
+      commentText || '(empty)',
+    ].join('\n'),
+    html: `
+      <p>A repeat spam offender hit the moderation threshold on <strong>${platform}</strong>.</p>
+      <ul>
+        <li><strong>Username:</strong> @${username}</li>
+        <li><strong>Comment ID:</strong> ${commentId}</li>
+        <li><strong>Spam count:</strong> ${spamCount}</li>
+        <li><strong>Triggers:</strong> ${(triggers || []).join(', ') || 'none'}</li>
+        <li><strong>Reason:</strong> ${reason || 'repeat spam threshold reached'}</li>
+      </ul>
+      <p><strong>Latest comment</strong></p>
+      <blockquote>${safeComment}</blockquote>
+    `,
+  });
+
+  return { recipient, ...result };
+}
 
 // ─── Handle an incoming comment event ───────────────────────
 export async function handleComment(commentData) {
@@ -78,6 +126,39 @@ export async function handleComment(commentData) {
         triggers.push('repeat_spam_offender');
         reason = `${reason || 'spam enforcement'}; repeat spam threshold ${MODERATION_CONFIG.spamBlockThreshold}/${MODERATION_CONFIG.spamWindowDays}d`;
       }
+    }
+
+    if (isSpamCategory && spamCount === MODERATION_CONFIG.spamBlockThreshold) {
+      const alertResult = await sendRepeatSpamAlert({
+        platform: 'instagram',
+        username,
+        commentId,
+        commentText,
+        spamCount,
+        triggers,
+        reason,
+      });
+
+      await logToSheet({
+        type: 'INSTAGRAM_COMMENT',
+        timestamp: new Date().toISOString(),
+        username,
+        incomingMessage: commentText,
+        response: alertResult.ok
+          ? `Repeat spam alert emailed to ${alertResult.recipient}`
+          : `Repeat spam alert failed: ${alertResult.reason || 'email_send_failed'}`,
+        action: alertResult.ok ? 'repeat_spam_alert_sent' : 'repeat_spam_alert_failed',
+        category,
+        reason: reason || '',
+        confidence: confidence?.toFixed(2) || '',
+        severity: 'medium',
+        triggers: serializeModerationTriggers(triggers, {
+          comment_id: commentId,
+          spam_count: spamCount,
+          moderation_alert_email: alertResult.recipient,
+        }),
+        needsReview: alertResult.ok ? 'no' : 'YES',
+      }).catch(() => {});
     }
 
     const flagForReview =

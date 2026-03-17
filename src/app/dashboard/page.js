@@ -86,10 +86,17 @@ function getEnvSnapshot() {
   const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
   const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
   const hasTikTokClientSecret = hasEnv('TIKTOK_CLIENT_SECRET');
+  const hasEmailAlerts =
+    hasEnv('SMTP_HOST') &&
+    hasEnv('SMTP_PORT') &&
+    hasEnv('SMTP_USER') &&
+    hasEnv('SMTP_PASS') &&
+    hasEnv('SMTP_FROM', 'SMTP_USER');
 
   return {
     hasGoogleCreds,
     hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
+    hasEmailAlerts,
     metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
     facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
     tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
@@ -844,6 +851,10 @@ export default async function DashboardPage({ searchParams }) {
                 <div className={styles.opsRow}>
                   <strong>TikTok OAuth</strong>
                   <p>{env.tikTokOAuthReady ? 'Credentials are configured. Use TikTok Connect to validate account data.' : 'Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to continue.'}</p>
+                </div>
+                <div className={styles.opsRow}>
+                  <strong>Moderation alerts</strong>
+                  <p>{env.hasEmailAlerts ? 'Repeat-spam alerts are configured to send by email.' : 'SMTP settings are missing, so repeat-spam email alerts are not armed yet.'}</p>
                 </div>
                 <div className={styles.opsRow}>
                   <strong>Last logged event</strong>

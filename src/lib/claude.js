@@ -272,6 +272,44 @@ function polishHumanTone(text, { maxChars = 420 } = {}) {
   return truncateNicely(output, maxChars);
 }
 
+function polishOutreachCopy(text, { maxChars = 500 } = {}) {
+  let output = toCleanText(text);
+  if (!output) return output;
+
+  const replacements = [
+    { pattern: /\bhope you(?:'re| are) well\b[,.!\s-]*/gi, value: '' },
+    { pattern: /\bjust reaching out\b/gi, value: 'reaching out' },
+    { pattern: /\bcircling back\b/gi, value: 'following up' },
+    { pattern: /\bbumping this\b/gi, value: 'following up' },
+    { pattern: /\bin case this got buried\b/gi, value: 'when you have a moment' },
+  ];
+
+  replacements.forEach(({ pattern, value }) => {
+    output = output.replace(pattern, value);
+  });
+
+  output = output
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;!?])/g, '$1')
+    .replace(/([!?]){3,}/g, '$1$1')
+    .trim();
+
+  return truncateNicely(output, maxChars);
+}
+
+function buildOutreachFitLine(contact = {}) {
+  const note = toCleanText(contact.notes || '').replace(/[.?!]+$/g, '');
+  if (!note) return 'Your content feels like a natural fit for Silver Mirror.';
+
+  if (/\bcreator\b|\baudience\b|\bcontent\b/i.test(note)) {
+    return 'Your content feels like a natural fit for Silver Mirror.';
+  }
+
+  const compactNote = truncateNicely(note, 70).replace(/[.?!]+$/g, '');
+  return `Your content feels like a natural fit for Silver Mirror, especially around ${compactNote}.`;
+}
+
 // ─── Generate a DM response ────────────────────────────────
 export async function generateDMResponse(userMessage, conversationHistory = []) {
   const messages = [
@@ -299,8 +337,9 @@ function fallbackOutreachMessage(basePitch, contact = {}) {
   const firstName = contact.firstName || contact.name?.split(' ')[0] || '';
   const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   const pitch = String(basePitch || '').trim();
-  return polishHumanTone(
-    `${greeting}\n\n${pitch}\n\nIf this sounds interesting, I'd love to share more details.`,
+  const fitLine = buildOutreachFitLine(contact);
+  return polishOutreachCopy(
+    `${greeting}\n\n${fitLine} ${pitch}\n\nIf it feels like a fit, I'd be happy to share details.`,
     { maxChars: 500 }
   );
 }
@@ -338,11 +377,17 @@ Contact context:
 Instructions:
 - Keep the message under 450 characters.
 - Keep tone warm, confident, premium, and personal.
+- Write like a thoughtful partnership lead from a premium brand, not a mass template.
 - Open with first name when available.
+- If notes are provided, weave in one concrete relevant detail naturally.
+- If notes are not provided, do not invent specifics.
 - Do not sound robotic, mass-mailed, or overly salesy.
+- Avoid filler like "hope you're well," "just reaching out," or anything that reads like spam.
 - Do not use hashtags.
 - Do not include more than one emoji.
+- Prefer two short paragraphs at most.
 - Include a soft CTA at the end.
+- A strong close is: "If it feels like a fit, I'd be happy to share details."
 - Return ONLY the final message text.`;
 
   try {
@@ -363,11 +408,21 @@ Instructions:
       return fallbackOutreachMessage(basePitch, contact);
     }
 
-    return polishHumanTone(text, { maxChars: 500 });
+    return polishOutreachCopy(text, { maxChars: 500 });
   } catch (error) {
     console.error('[Claude] Outreach generation failed:', error?.message || error);
     return fallbackOutreachMessage(basePitch, contact);
   }
+}
+
+function fallbackOutreachFollowUpMessage(contact = {}, followUpGoal = '') {
+  const firstName = contact.firstName || contact.name?.split(' ')[0] || '';
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+  const goal = String(followUpGoal || 'Wanted to follow up and see if this could be a fit.').trim();
+  return polishOutreachCopy(
+    `${greeting}\n\nWanted to follow up in case the timing is right. ${goal}\n\nIf helpful, I can send a few more details.`,
+    { maxChars: 360 }
+  );
 }
 
 export async function generateOutreachFollowUpMessage({
@@ -382,12 +437,7 @@ export async function generateOutreachFollowUpMessage({
 
   const noApiKey = !getEnv('ANTHROPIC_API_KEY');
   if (noApiKey) {
-    return polishHumanTone(
-      `Just following up in case this got buried. ${
-        String(followUpGoal || 'Would love to connect if you are open to it.').trim()
-      }`,
-      { maxChars: 360 }
-    );
+    return fallbackOutreachFollowUpMessage(contact, followUpGoal);
   }
 
   const name = contact.name || '';
@@ -416,9 +466,12 @@ Rules:
 - Keep under 350 characters.
 - Do not repeat the original wording.
 - Warm, concise, premium tone.
+- Write like the same thoughtful partnership lead as the first message.
 - No pressure language.
+- Avoid phrases like "bumping this", "circling back", "hope you're well", or "in case this got buried".
 - No more than one emoji.
 - End with a clear but soft CTA.
+- Keep it crisp enough for a second touchpoint, not a rewrite of the first message.
 - Return only the final follow-up message text.`;
 
   try {
@@ -435,10 +488,10 @@ Rules:
       .join('\n')
       .trim();
 
-    return polishHumanTone(text || 'Just following up in case this got buried.', { maxChars: 360 });
+    return polishOutreachCopy(text || fallbackOutreachFollowUpMessage(contact, followUpGoal), { maxChars: 360 });
   } catch (error) {
     console.error('[Claude] Outreach follow-up generation failed:', error?.message || error);
-    return polishHumanTone('Just following up in case this got buried.', { maxChars: 360 });
+    return fallbackOutreachFollowUpMessage(contact, followUpGoal);
   }
 }
 

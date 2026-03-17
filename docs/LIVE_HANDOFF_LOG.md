@@ -227,3 +227,52 @@
   - `/dashboard/outreach`
   - `/dashboard/api/outreach/generate`
   - `/dashboard/api/outreach/send`
+
+## 2026-03-17 11:47 EDT
+
+### Completed
+- Added SMTP-backed moderation alert helper:
+  - `/src/lib/email.js`
+- Repeat-spam threshold alerts now email Sierra automatically when the same account crosses the moderation threshold:
+  - `/src/lib/comment-handler.js`
+  - `/src/lib/fb-comment-handler.js`
+- Added moderation alert readiness visibility:
+  - `/api/health`
+  - `/dashboard`
+  - new flag: `hasEmailAlerts`
+- Strengthened Outreach CRM operator QA flow:
+  - duplicate contact import cleanup
+  - row-level review flags
+  - better send eligibility checks
+  - clearer status messaging
+  - review-first selection workflow
+  - inline draft editing with length warnings
+- Strengthened outreach/follow-up copy quality:
+  - more human partnership tone
+  - softer CTA defaults
+  - reduced generic phrasing in prompts and fallbacks
+- Added moderation alert audit logging for sent/failed repeat-spam emails.
+
+### QA
+- `npm run lint` passed
+- `npm run build` passed
+- Clean local production-style smoke checks passed after regenerating `.next`
+- Verified locally:
+  - `/api/health` includes `hasEmailAlerts`
+  - `/dashboard` shows `Spam removed` and `Moderation alerts`
+  - `/dashboard/outreach` shows `Needs Review`, `Review first`, and new operator QA copy
+  - outreach generate fallback returns cleaner premium copy when Anthropic is unavailable
+
+### Notes
+- Sierra alert destination currently resolves from `ESCALATION_CONTACTS.socialMediaManager.email`
+  - fallback remains `sierra.case@silvermirror.com`
+- Email alerts will stay dormant until SMTP vars exist in production:
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_USER`
+  - `SMTP_PASS`
+  - `SMTP_FROM` (or fallback to `SMTP_USER`)
+
+### Next
+- Push this batch to `main` and confirm Vercel deploy goes green.
+- Once production SMTP vars are present, verify `/api/health` shows `hasEmailAlerts: true`.

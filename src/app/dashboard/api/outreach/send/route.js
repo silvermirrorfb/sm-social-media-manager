@@ -7,6 +7,7 @@ import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboar
 const MAX_SEND_BATCH = 60;
 const MAX_SEND_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 350;
+const MAX_MESSAGE_CHARS = 900;
 
 function normalizePlatform(raw) {
   const value = String(raw || '').trim().toLowerCase();
@@ -88,6 +89,7 @@ export async function POST(request) {
       const recipientId = String(rawItem.recipientId || '').trim();
       const message = String(rawItem.message || '').trim();
       const username = String(rawItem.username || rawItem.name || '').trim();
+      const status = String(rawItem.status || '').trim();
 
       const baseResult = {
         id,
@@ -95,6 +97,7 @@ export async function POST(request) {
         recipientId,
         username,
         message,
+        status,
       };
 
       if (!platform) {
@@ -109,6 +112,16 @@ export async function POST(request) {
 
       if (!message) {
         results.push({ ...baseResult, status: 'skipped', reason: 'missing_message' });
+        continue;
+      }
+
+      if (status === 'sent') {
+        results.push({ ...baseResult, status: 'skipped', reason: 'already_sent' });
+        continue;
+      }
+
+      if (message.length > MAX_MESSAGE_CHARS) {
+        results.push({ ...baseResult, status: 'skipped', reason: 'message_too_long' });
         continue;
       }
 

@@ -247,6 +247,10 @@
   background: #fcf8f2;
 }
 
+.rowNeedsReview {
+  background: #fff8ef;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.82rem;
@@ -291,6 +295,15 @@
   border-radius: 10px;
   padding: 10px 12px;
   color: #6a4518;
+}
+
+.notice {
+  margin-top: 10px;
+  background: #eef6ff;
+  border: 1px solid #bdd6f5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #184b77;
 }
 
 .toolbarGrid {
@@ -359,6 +372,56 @@
   background: #f1eadf;
   color: #685846;
   border-color: #e1d6c7;
+}
+
+.messageEditor {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  border: 1px solid #d7cab6;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.messageMeta {
+  margin-top: 6px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: #6f624f;
+}
+
+.messageWarn {
+  color: #9a4f18;
+  font-weight: 700;
+}
+
+.flagList {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.flagPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff0da;
+  border: 1px solid #f0cf9c;
+  color: #8a551a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.flagEmpty {
+  color: #4c7a52;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {
