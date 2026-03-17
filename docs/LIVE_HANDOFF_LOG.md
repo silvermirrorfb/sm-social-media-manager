@@ -354,3 +354,25 @@
   - `hello@silvermirror.com`
   - `sierra.case@silvermirror.com`
 - Persistent spam counting now uses the existing Google Sheet logs as a durable fallback when in-memory counts reset.
+
+## 2026-03-17 14:20 EDT
+
+### Completed
+- Ported the local TikTok queue/draft work from the `c981` worktree into the main production repo as the new source of truth:
+  - `/src/lib/tiktok-ops.js`
+  - `/src/app/dashboard/api/tiktok/ops/route.js`
+  - `/src/app/dashboard/api/tiktok/ops/draft/route.js`
+  - `/src/app/dashboard/tiktok/page.js`
+  - `/src/app/dashboard/tiktok/TikTokOpsClient.js`
+- Added `generateTikTokDraft()` to the main Claude helper:
+  - `/src/lib/claude.js`
+- Updated dashboard readiness copy to reflect TikTok's real operating model in this app:
+  - human-in-the-loop queue first
+  - TikTok Connect remains available, but queue readiness no longer depends on OAuth credentials
+- Added TikTok operator docs and notes from the `c981` worktree:
+  - `/docs/TIKTOK_SOCIAL_COORDINATOR_GUIDE.md`
+  - `/docs/TIKTOK_INTERNAL_WORKFLOW_NOTES_2026-03-17.md`
+- Updated `.env.example` and `README.md` for the TikTok queue + draft flow.
+
+### Notes
+- This port intentionally keeps TikTok queue APIs under `/dashboard/api/...` so the existing dashboard session cookie continues to protect them.

@@ -495,6 +495,101 @@ Rules:
   }
 }
 
+export async function generateTikTokDraft(task = {}) {
+  if (!getEnv('ANTHROPIC_API_KEY')) {
+    throw new Error('ANTHROPIC_API_KEY is required for TikTok draft generation');
+  }
+
+  const workflowGuidance = {
+    inbound_dm: [
+      'Write a short, warm customer-facing reply.',
+      'Keep the tone casual, polished, and native to TikTok DMs.',
+      'Prefer 1-3 sentences and stay under 280 characters unless the question truly needs more.',
+    ],
+    influencer_dm: [
+      'Write a concise outbound influencer outreach message from Silver Mirror.',
+      'Sound premium, friendly, and low-pressure.',
+      'Mention one concrete reason the creator is a fit if the context supports it.',
+      'Stay under 320 characters.',
+    ],
+    comment_review: [
+      'Do not default to replying.',
+      'Primary output is the safest operator action inside TikTok: remove, report, ignore, or escalate.',
+      'Only provide a reply if the safest action is to respond publicly.',
+    ],
+  };
+
+  const taskContext = [
+    `Workflow: ${task.workflow || 'inbound_dm'}`,
+    `Handle: ${task.handle || 'unknown'}`,
+    `Author: ${task.author || 'unknown'}`,
+    `Message: ${task.message || '(empty)'}`,
+    `Existing note: ${task.note || '(none)'}`,
+    `Current suggested reply: ${task.suggestedReply || '(none)'}`,
+    `Current suggested action: ${task.suggestedAction || '(none)'}`,
+  ].join('\n');
+
+  const userPrompt = `You are helping Silver Mirror's internal TikTok ops team.
+
+Use the brand facts below when they are relevant:
+${getSystemPrompt()}
+
+Task guidance:
+${(workflowGuidance[task.workflow] || workflowGuidance.inbound_dm).map((line) => `- ${line}`).join('\n')}
+
+Task context:
+${taskContext}
+
+Respond in JSON only:
+{
+  "suggestedReply": "reply text or empty string",
+  "suggestedAction": "clear operator action inside TikTok",
+  "reason": "brief internal reason"
+}
+
+Rules:
+- Never invent Silver Mirror policies, pricing, or promo claims.
+- If the user needs booking or human support, route them cleanly using the existing Silver Mirror contacts from the brand facts.
+- For negative or sensitive comments, prefer moderation guidance over public argument.
+- For influencer outreach, avoid sounding automated or mass-blasted.
+- Keep copy concise and operational.`;
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 400,
+    temperature: 0.35,
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const fallback = {
+    suggestedReply: '',
+    suggestedAction:
+      task.workflow === 'comment_review'
+        ? 'Review in TikTok manually and decide whether to remove, report, or escalate.'
+        : 'Review in TikTok manually and draft the response by hand.',
+    reason: 'parse error',
+  };
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+  } catch (error) {
+    console.error('[Claude] Failed to parse TikTok draft:', text);
+    parsed = fallback;
+  }
+
+  return {
+    suggestedReply: toCleanText(parsed.suggestedReply || ''),
+    suggestedAction: toCleanText(parsed.suggestedAction || fallback.suggestedAction),
+    reason: toCleanText(parsed.reason || fallback.reason),
+  };
+}
+
 // ─── Classify a comment ─────────────────────────────────────
 // Returns: { category, confidence, action, replyText, triggers, severity, reason }
 export async function classifyComment(commentText, username, followerCount = null) {

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 function getPlatforms(env, entries = []) {
   const fbReady = env.facebookWebhookReady;
   const tiktokEvents = entries.filter((entry) => entry.platform === 'tiktok').length;
-  const tiktokStatus = env.tikTokOAuthReady
+  const tiktokStatus = env.tikTokOpsQueueReady
     ? (tiktokEvents > 0 ? 'live' : 'staged')
     : 'pending';
 
@@ -36,11 +36,11 @@ function getPlatforms(env, entries = []) {
       key: 'tiktok',
       name: 'TikTok',
       status: tiktokStatus,
-      description: !env.tikTokOAuthReady
-        ? 'TikTok is not ready yet. Add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET in Vercel.'
+      description: !env.tikTokOpsQueueReady
+        ? 'TikTok human-in-the-loop ops are not ready yet. Connect Google Sheets to turn on the queue.'
         : tiktokEvents > 0
-          ? 'TikTok webhook traffic is reaching production. OAuth and callback routes are active.'
-          : 'TikTok credentials are configured. Waiting for first real webhook traffic.',
+          ? 'TikTok tasks and events are flowing into the ops queue. Human review and manual action stay in the loop.'
+          : 'TikTok ops queue is ready. Use the TikTok Ops Console to draft, track, and work tasks manually.',
     },
   ];
 }
@@ -86,6 +86,7 @@ function getEnvSnapshot() {
   const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
   const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
   const hasTikTokClientSecret = hasEnv('TIKTOK_CLIENT_SECRET');
+  const hasAnthropicKey = hasEnv('ANTHROPIC_API_KEY');
   const hasEmailAlerts =
     hasEnv('SMTP_HOST') &&
     hasEnv('SMTP_PORT') &&
@@ -96,10 +97,12 @@ function getEnvSnapshot() {
   return {
     hasGoogleCreds,
     hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
+    hasAnthropicKey,
     hasEmailAlerts,
     metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
     facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && (hasEnv('FACEBOOK_APP_SECRET') || hasMetaSecret) && hasVerifyToken,
     tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
+    tikTokOpsQueueReady: hasEnv('GOOGLE_SHEET_ID') && hasGoogleCreds,
   };
 }
 
@@ -255,21 +258,21 @@ function getTakeoverStatus(platformKey, env, entries) {
   }
 
   if (platformKey === 'tiktok') {
-    if (!env.tikTokOAuthReady) {
+    if (!env.tikTokOpsQueueReady) {
       return {
-        label: 'Waiting on platform readiness',
-        body: 'TikTok will stay staged until TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET are set and validated through the TikTok Connect page.',
+        label: 'Waiting on queue setup',
+        body: 'TikTok work in this app is human-in-the-loop. Turn on Google Sheets logging first so the ops queue has a reliable home.',
       };
     }
     if (entries.length === 0) {
       return {
-        label: 'Configured, watching for traffic',
-        body: 'TikTok credentials are configured and webhook callback is live. Send a TikTok test event or real event to confirm steady ingestion.',
+        label: 'Queue ready for operators',
+        body: 'TikTok work does not depend on full API automation here. The team can start tracking inbound DMs, outreach, and comment review from the TikTok Ops Console now.',
       };
     }
     return {
-      label: 'Actively ingesting',
-      body: 'TikTok events are landing in production. Continue monitoring the queue while we complete full DM/comment action automation.',
+      label: 'Actively coordinating',
+      body: 'TikTok tasks are active in production. Keep the human operator logged into TikTok, use the queue for drafts and notes, and complete the final action manually in TikTok.',
     };
   }
 
@@ -849,8 +852,8 @@ export default async function DashboardPage({ searchParams }) {
                   <p>{env.facebookWebhookReady ? 'Configured and handling production traffic.' : 'Facebook Page credentials not set yet.'}</p>
                 </div>
                 <div className={styles.opsRow}>
-                  <strong>TikTok OAuth</strong>
-                  <p>{env.tikTokOAuthReady ? 'Credentials are configured. Use TikTok Connect to validate account data.' : 'Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to continue.'}</p>
+                  <strong>TikTok ops queue</strong>
+                  <p>{env.tikTokOpsQueueReady ? 'Queue storage is configured. Use the TikTok Ops Console for human-in-the-loop work.' : 'Connect Google Sheets to turn on the TikTok ops queue.'}</p>
                 </div>
                 <div className={styles.opsRow}>
                   <strong>Moderation alerts</strong>
@@ -862,8 +865,10 @@ export default async function DashboardPage({ searchParams }) {
                 </div>
               </div>
               <p className={styles.toolbarText} style={{ marginTop: 12 }}>
-                TikTok setup and live account checks:
+                TikTok tools:
                 {' '}
+                <Link href="/dashboard/tiktok">open TikTok Ops Console</Link>
+                {' · '}
                 <Link href="/tiktok/connect">open TikTok Connect</Link>.
               </p>
             </div>

@@ -14,7 +14,11 @@ function getSheetHeaders() {
   ]];
 }
 
-function getSheetsClient() {
+export function getSpreadsheetId() {
+  return getEnv('GOOGLE_SHEET_ID');
+}
+
+export function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
 
   // Support both patterns:
@@ -55,7 +59,7 @@ function getSheetsClient() {
 // Columns: Timestamp | Type | Username | Incoming Message | Response | Action |
 //          Category | Reason | Confidence | Severity | Triggers | Needs Review
 export async function logToSheet(data) {
-  const sheetId = getEnv('GOOGLE_SHEET_ID');
+  const sheetId = getSpreadsheetId();
   if (!sheetId) {
     console.warn('[Sheets] No GOOGLE_SHEET_ID configured — skipping log');
     return;
@@ -95,7 +99,7 @@ export async function logToSheet(data) {
 
 // ─── Initialize sheet headers if empty ──────────────────────
 export async function initSheetHeaders() {
-  const sheetId = getEnv('GOOGLE_SHEET_ID');
+  const sheetId = getSpreadsheetId();
   if (!sheetId) return;
 
   const sheets = getSheetsClient();
@@ -163,7 +167,7 @@ async function ensureLogSheetReady(sheets, sheetId) {
 }
 
 export async function getRecentLogRows(limit = 150) {
-  const sheetId = getEnv('GOOGLE_SHEET_ID');
+  const sheetId = getSpreadsheetId();
   if (!sheetId) return [];
 
   const sheets = getSheetsClient();
@@ -199,7 +203,7 @@ export async function getPersistentSpamCount({ type, username, windowDays = 30 }
   const normalizedUsername = String(username || '').trim().replace(/^@/, '').toLowerCase();
   if (!normalizedType || !normalizedUsername) return 0;
 
-  const sheetId = getEnv('GOOGLE_SHEET_ID');
+  const sheetId = getSpreadsheetId();
   if (!sheetId) return 0;
 
   const sheets = getSheetsClient();
