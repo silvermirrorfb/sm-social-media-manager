@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { generateOutreachMessage } from '@/lib/claude';
 import { logToSheet } from '@/lib/sheets';
 import crypto from 'crypto';
+import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboard-auth';
 
 const MAX_CONTACTS = 80;
 
@@ -26,6 +27,11 @@ function normalizeContact(contact = {}, fallbackPlatform = 'instagram') {
 
 export async function POST(request) {
   try {
+    const sessionValue = request.cookies.get(getDashboardCookieName())?.value;
+    if (!(await hasValidDashboardSession(sessionValue))) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const contactsRaw = Array.isArray(body.contacts) ? body.contacts : [];
     const basePitch = String(body.basePitch || '').trim();

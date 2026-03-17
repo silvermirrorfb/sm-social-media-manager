@@ -74,3 +74,11 @@
 ### Notes
 - TikTok remains draft/export-only for outbound in this app until an approved direct send path is implemented.
 - Outreach events log into Sheets under `*_OUTREACH` types for traceability.
+
+### Hotfix
+- Fixed dashboard runtime crash caused by platform list initialization order.
+- Added explicit server-side dashboard session checks for:
+  - `/dashboard`
+  - `/dashboard/outreach`
+  - `/dashboard/api/outreach/generate`
+  - `/dashboard/api/outreach/send`

@@ -3,6 +3,9 @@ import styles from './dashboard.module.css';
 import { getRecentLogRows } from '@/lib/sheets';
 import { logoutAction } from './login/actions';
 import { getInstagramAccountId, hasEnv } from '@/lib/env';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboard-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -458,6 +461,11 @@ function getSeverityClass(severity) {
 }
 
 export default async function DashboardPage({ searchParams }) {
+  const sessionValue = cookies().get(getDashboardCookieName())?.value;
+  if (!(await hasValidDashboardSession(sessionValue))) {
+    redirect('/dashboard/login?next=%2Fdashboard');
+  }
+
   const env = getEnvSnapshot();
 
   const rawRows = await getRecentLogRows(250);

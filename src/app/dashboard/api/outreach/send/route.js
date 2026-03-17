@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sendDirectMessage } from '@/lib/instagram';
 import { sendMessengerMessage } from '@/lib/facebook';
 import { logToSheet } from '@/lib/sheets';
+import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboard-auth';
 
 const MAX_SEND_BATCH = 60;
 
@@ -23,6 +24,11 @@ async function sendToPlatform({ platform, recipientId, message }) {
 
 export async function POST(request) {
   try {
+    const sessionValue = request.cookies.get(getDashboardCookieName())?.value;
+    if (!(await hasValidDashboardSession(sessionValue))) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const items = Array.isArray(body.items) ? body.items : [];
     const campaignName = String(body.campaignName || '').trim() || 'manual_campaign';
