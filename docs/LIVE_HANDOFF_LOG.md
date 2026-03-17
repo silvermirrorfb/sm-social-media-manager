@@ -309,3 +309,25 @@
 ### Notes
 - One cowork-introduced regression was corrected before ship:
   - smart quotes in `/src/lib/fb-dm-handler.js` were replaced with a normal JS string literal
+
+## 2026-03-17 13:30 EDT
+
+### Completed
+- Tightened Outreach CRM live-send gating so drafts with review flags no longer count as sendable or get included in live-send / retry batches:
+  - `/src/app/dashboard/outreach/OutreachClient.js`
+- Improved generation status copy so operators can see how many drafts are truly live-send ready vs. still needing review.
+
+### QA
+- `npm run lint` passed
+- `npm run build` passed
+- Production moderation verification via Vercel logs confirmed Instagram webhook processed the live test sequence from `@thelastexit`:
+  - positive question
+  - complaint
+  - spam hit 1
+  - spam hit 2
+  - spam hit 3
+- Production logs also confirmed repeat-spam threshold handling:
+  - `[Comment] @thelastexit hit spam threshold (3) — queueing for repeat-offender review`
+
+### Notes
+- I could confirm webhook ingestion and threshold hit from Vercel logs, but I could not directly confirm the Google Sheet row or Sierra inbox delivery from this environment because Google API access is blocked here.

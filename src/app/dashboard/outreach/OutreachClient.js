@@ -186,6 +186,10 @@ function canSendDraftNow(item) {
   );
 }
 
+function isLiveSendReady(item, reviewFlags = []) {
+  return canSendDraftNow(item) && reviewFlags.length === 0;
+}
+
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -297,18 +301,26 @@ export default function OutreachPage() {
     }
   }, [savedTemplates]);
 
+  const draftReviewMap = useMemo(() => {
+    const map = new Map();
+    drafts.forEach((item) => {
+      map.set(item.id, getDraftReviewFlags(item));
+    });
+    return map;
+  }, [drafts]);
+
   const sendableDrafts = useMemo(
-    () => drafts.filter((item) => canSendDraftNow(item)),
-    [drafts]
+    () => drafts.filter((item) => isLiveSendReady(item, draftReviewMap.get(item.id) || [])),
+    [draftReviewMap, drafts]
   );
 
   const selectedSendableCount = useMemo(() => {
     let count = 0;
     drafts.forEach((item) => {
-      if (canSendDraftNow(item) && selectedIds.has(item.id)) count += 1;
+      if (isLiveSendReady(item, draftReviewMap.get(item.id) || []) && selectedIds.has(item.id)) count += 1;
     });
     return count;
-  }, [drafts, selectedIds]);
+  }, [draftReviewMap, drafts, selectedIds]);
 
   const selectedDraftCount = useMemo(() => {
     let count = 0;
@@ -319,17 +331,9 @@ export default function OutreachPage() {
   }, [drafts, selectedIds]);
 
   const failedSendableCount = useMemo(
-    () => drafts.filter((item) => item.status === 'failed' && canSendDraftNow(item)).length,
-    [drafts]
+    () => drafts.filter((item) => item.status === 'failed' && isLiveSendReady(item, draftReviewMap.get(item.id) || [])).length,
+    [draftReviewMap, drafts]
   );
-
-  const draftReviewMap = useMemo(() => {
-    const map = new Map();
-    drafts.forEach((item) => {
-      map.set(item.id, getDraftReviewFlags(item));
-    });
-    return map;
-  }, [drafts]);
 
   const selectedDrafts = useMemo(
     () => drafts.filter((item) => selectedIds.has(item.id)),
@@ -391,7 +395,7 @@ export default function OutreachPage() {
 
   function buildSendItemsFromDrafts(sourceDrafts) {
     return sourceDrafts
-      .filter((item) => canSendDraftNow(item))
+      .filter((item) => isLiveSendReady(item, draftReviewMap.get(item.id) || []))
       .map((item) => ({
         id: item.id,
         platform: item.platform,
@@ -459,13 +463,14 @@ export default function OutreachPage() {
       const nextSelected = new Set();
       const generatedResults = payload.results || [];
       generatedResults.forEach((item) => {
-        if (canSendDraftNow(item)) nextSelected.add(item.id);
+        if (isLiveSendReady(item, getDraftReviewFlags(item))) nextSelected.add(item.id);
       });
       setSelectedIds(nextSelected);
       if (generatedResults.length > 0) {
         const reviewCount = generatedResults.filter((item) => getDraftReviewFlags(item).length > 0).length;
+        const readyCount = generatedResults.filter((item) => isLiveSendReady(item, getDraftReviewFlags(item))).length;
         if (reviewCount > 0) {
-          setStatusMessage(`Generated ${generatedResults.length} draft(s). ${reviewCount} should be reviewed before live send.`);
+          setStatusMessage(`Generated ${generatedResults.length} draft(s). ${readyCount} are live-send ready and ${reviewCount} should be reviewed before sending.`);
         } else {
           setStatusMessage(`Generated ${generatedResults.length} draft(s). Everything looks send-ready.`);
         }
@@ -608,7 +613,7 @@ export default function OutreachPage() {
 
       const matchesCustom = query && haystack.includes(query);
       if (mode === 'all') next.add(item.id);
-      if (mode === 'sendable' && canSendDraftNow(item)) next.add(item.id);
+      if (mode === 'sendable' && isLiveSendReady(item, draftReviewMap.get(item.id) || [])) next.add(item.id);
       if (mode === 'failed' && item.status === 'failed') next.add(item.id);
       if (mode === 'review' && (draftReviewMap.get(item.id) || []).length > 0) next.add(item.id);
       if (mode === 'instagram' && item.platform === 'instagram') next.add(item.id);
@@ -657,9 +662,9 @@ export default function OutreachPage() {
   }
 
   async function retryFailedSends() {
-    const failedDrafts = drafts.filter((item) => item.status === 'failed' && canSendDraftNow(item));
+    const failedDrafts = drafts.filter((item) => item.status === 'failed' && isLiveSendReady(item, draftReviewMap.get(item.id) || []));
     if (failedDrafts.length === 0) {
-      setErrorMessage('No failed sendable drafts to retry.');
+      setErrorMessage('No failed live-send-ready drafts to retry.');
       return;
     }
     if (!window.confirm(`Retry sending ${failedDrafts.length} failed message(s)?`)) return;
