@@ -51,6 +51,7 @@ export const HUMAN_REVIEW_TRIGGERS = [
   'health_safety',             // Health or safety concerns
   'verified_large_account',    // High-follower accounts
   'low_confidence',            // Classifier unsure
+  'repeat_spam_offender',      // Same account repeatedly drops spam
 ];
 
 // ── Partner Brand Whitelist ──
@@ -113,6 +114,9 @@ export function classifySeverity(category, triggers) {
     return 'medium';
   }
   if (triggers.includes('verified_large_account')) {
+    return 'medium';
+  }
+  if (triggers.includes('repeat_spam_offender') || category === 'scam') {
     return 'medium';
   }
   return 'low';

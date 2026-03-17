@@ -1,5 +1,27 @@
 # Live Handoff Log
 
+## 2026-03-17 11:12 ET
+
+### Completed
+- Tightened automatic spam comment moderation across Instagram and Facebook:
+  - added stronger pre-AI spam heuristics for links, external contact info, promo bait, multi-mention bait, emoji bait, and scam language
+  - normalized moderation decisions so spam/scam comments are always auto-hidden even if model output drifts
+  - added repeat-spam offender tracking with review escalation after the configured threshold
+- Added a shared moderation helper:
+  - `/src/lib/comment-moderation.js`
+  - shared spam counting, action normalization, trigger serialization, and audit-friendly action labels
+- Improved moderation audit visibility on the dashboard:
+  - new workspace filter: `Spam removed`
+  - new overview stat: `Spam removed`
+  - moderation log entries now include richer triggers such as `auto_spam_hide`, `spam_count`, and `comment_id`
+
+### QA
+- `npm run lint` passed.
+- `npm run build` passed.
+- Local runtime smoke confirmed:
+  - authenticated `/dashboard?platform=instagram&view=spam&range=24h` renders
+  - protected `/dashboard/api/outreach/send` still returns `401` when unauthenticated
+
 ## 2026-03-17 10:45 ET
 
 ### Completed

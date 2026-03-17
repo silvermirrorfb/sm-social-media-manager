@@ -2,29 +2,20 @@ import { replyToComment, hideComment } from './instagram';
 import { classifyComment } from './claude';
 import { logToSheet } from './sheets';
 import {
-  AUTO_HIDE_CATEGORIES,
   needsHumanReview,
   classifySeverity,
   PARTNER_WHITELIST,
   BLOCK_LIST,
+  MODERATION_CONFIG,
 } from './moderation-policy';
 import { getInstagramAccountId } from './env';
-
-// ─── In-memory spam tracker ─────────────────────────────────
-// TODO: Move to Redis for durability in serverless
-const spamTracker = new Map();
-
-function incrementSpamCount(username) {
-  const entry = spamTracker.get(username) || { count: 0, firstSeen: Date.now() };
-  const windowMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-  if (Date.now() - entry.firstSeen > windowMs) {
-    entry.count = 0;
-    entry.firstSeen = Date.now();
-  }
-  entry.count++;
-  spamTracker.set(username, entry);
-  return entry.count;
-}
+import {
+  buildLoggedModerationAction,
+  incrementSpamCount,
+  normalizeCommentDecision,
+  serializeModerationTriggers,
+  shouldEscalateRepeatSpammer,
+} from './comment-moderation';
 
 // ─── Handle an incoming comment event ───────────────────────
 export async function handleComment(commentData) {
@@ -69,26 +60,35 @@ export async function handleComment(commentData) {
   }
 
   try {
-    // Classify the comment using Claude
     const classification = await classifyComment(commentText, username);
-    let { category, confidence, action, replyText, triggers, severity, reason } = classification;
-
-    if (AUTO_HIDE_CATEGORIES.includes(category) && action === 'reply') {
-      action = category === 'negative' ? 'hide_and_flag' : 'hide';
-      replyText = null;
-      reason = `${reason || 'policy override'}; auto-hide override`;
-    }
-
-    if (category === 'negative' && action !== 'hide_and_flag') {
-      action = 'hide_and_flag';
-      replyText = null;
-    }
+    let { category, confidence, action, replyText, triggers, reason } =
+      normalizeCommentDecision(classification);
 
     console.log(`[Comment] Classified: ${category} (${(confidence * 100).toFixed(0)}% conf) → ${action}`);
 
-    // Check if needs human review
-    const flagForReview = needsHumanReview(confidence, category, triggers || []);
+    let spamCount = 0;
+    const isSpamCategory = category === 'spam' || category === 'scam';
+
+    if ((action === 'hide' || action === 'block') && isSpamCategory) {
+      spamCount = incrementSpamCount('instagram', username);
+      if (!triggers.includes('auto_spam_hide')) {
+        triggers.push('auto_spam_hide');
+      }
+      if (shouldEscalateRepeatSpammer(spamCount) && !triggers.includes('repeat_spam_offender')) {
+        triggers.push('repeat_spam_offender');
+        reason = `${reason || 'spam enforcement'}; repeat spam threshold ${MODERATION_CONFIG.spamBlockThreshold}/${MODERATION_CONFIG.spamWindowDays}d`;
+      }
+    }
+
+    const flagForReview =
+      needsHumanReview(confidence, category, triggers || []) ||
+      (isSpamCategory && shouldEscalateRepeatSpammer(spamCount));
     const computedSeverity = classifySeverity(category, triggers || []);
+    const loggedAction = buildLoggedModerationAction(action, category);
+    const serializedTriggers = serializeModerationTriggers(triggers, {
+      comment_id: commentId,
+      spam_count: spamCount || undefined,
+    });
 
     // Execute the action
     switch (action) {
@@ -101,13 +101,8 @@ export async function handleComment(commentData) {
 
       case 'hide':
         await hideComment(commentId);
-        // Track spam
-        if (category === 'spam') {
-          const spamCount = incrementSpamCount(username);
-          if (spamCount >= 3) {
-            console.log(`[Comment] @${username} hit spam threshold (${spamCount}) — should be blocked`);
-            // TODO: Implement Instagram block API when available
-          }
+        if (isSpamCategory && shouldEscalateRepeatSpammer(spamCount)) {
+          console.log(`[Comment] @${username} hit spam threshold (${spamCount}) — queueing for repeat-offender review`);
         }
         console.log(`[Comment] Hidden: @${username} (${category})`);
         break;
@@ -138,12 +133,12 @@ export async function handleComment(commentData) {
       username,
       incomingMessage: commentText,
       response: replyText || '',
-      action: flagForReview ? `${action} + FLAGGED` : action,
+      action: flagForReview ? `${loggedAction} + FLAGGED` : loggedAction,
       category,
       reason: reason || '',
       confidence: confidence?.toFixed(2) || '',
       severity: computedSeverity,
-      triggers: (triggers || []).join(', '),
+      triggers: serializedTriggers,
       needsReview: flagForReview ? 'YES' : 'no',
     }).catch((err) => console.error('[Comment] Sheet logging failed:', err));
 

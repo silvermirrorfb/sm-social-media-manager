@@ -57,6 +57,7 @@ const VIEW_LABELS = {
   review: 'Needs review',
   unanswered: 'No bot reply',
   escalated: 'Escalated',
+  spam: 'Spam removed',
 };
 
 const RANGE_LABELS = {
@@ -123,6 +124,8 @@ function normalizeLogRow(row) {
   const confidence = Number(row[8]);
   const severity = (row[9] || '').toLowerCase();
   const needsReview = (row[11] || '').toUpperCase() === 'YES';
+  const category = (row[6] || '').toLowerCase();
+  const triggers = row[10] || '';
 
   return {
     id: `${row[0] || 'missing'}-${parsed.platform}-${parsed.channel}-${row[2] || 'unknown'}`,
@@ -137,11 +140,12 @@ function normalizeLogRow(row) {
     reason: row[7] || '',
     confidence: Number.isFinite(confidence) ? confidence : null,
     severity: severity || 'low',
-    triggers: row[10] || '',
+    triggers,
     needsReview,
     botAnswered: Boolean(response),
     isEscalated: actionLower.includes('escalat'),
     isModerated: actionLower.includes('hide') || actionLower.includes('block'),
+    isSpam: (category === 'spam' || category === 'scam') && (actionLower.includes('hide') || actionLower.includes('block')),
     isError: actionLower.includes('error'),
     isIgnored: actionLower.includes('ignored'),
   };
@@ -167,11 +171,12 @@ function buildSummary(entries) {
       if (entry.isEscalated) acc.escalated += 1;
       if (entry.needsReview) acc.needsReview += 1;
       if (entry.isModerated) acc.moderated += 1;
+      if (entry.isSpam) acc.spamRemoved += 1;
       if (!entry.botAnswered) acc.unanswered += 1;
       if (entry.isError) acc.errors += 1;
       return acc;
     },
-    { answered: 0, escalated: 0, needsReview: 0, moderated: 0, unanswered: 0, errors: 0 }
+    { answered: 0, escalated: 0, needsReview: 0, moderated: 0, spamRemoved: 0, unanswered: 0, errors: 0 }
   );
 }
 
@@ -321,6 +326,7 @@ function matchesView(entry, view) {
   if (view === 'review') return entry.needsReview;
   if (view === 'unanswered') return !entry.botAnswered;
   if (view === 'escalated') return entry.isEscalated;
+  if (view === 'spam') return entry.isSpam;
   return true;
 }
 
@@ -355,6 +361,7 @@ function getCampaignFilters(entries) {
 
 function getFlagText(entry) {
   const parts = [];
+  if (entry.isSpam) parts.push('spam removed');
   if (entry.needsReview) parts.push('needs review');
   if (entry.isEscalated) parts.push('escalated');
   if (entry.isModerated) parts.push('moderated');
@@ -799,6 +806,10 @@ export default async function DashboardPage({ searchParams }) {
                 <div className={styles.statCard}>
                   <span className={styles.statLabel}>Moderated</span>
                   <span className={styles.statValue}>{summary.moderated}</span>
+                </div>
+                <div className={styles.statCard}>
+                  <span className={styles.statLabel}>Spam removed</span>
+                  <span className={styles.statValue}>{summary.spamRemoved}</span>
                 </div>
                 <div className={styles.statCard}>
                   <span className={styles.statLabel}>Escalated</span>

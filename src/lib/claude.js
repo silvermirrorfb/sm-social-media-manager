@@ -18,6 +18,7 @@ const VALID_CATEGORIES = new Set([
   'political',
   'off_topic',
   'scam',
+  'ambiguous_negative',
 ]);
 
 const PROFANITY_PATTERNS = [
@@ -37,7 +38,94 @@ const SCAM_PATTERNS = [
   /bitcoin/i,
   /link in bio/i,
   /earn \$?\d+/i,
+  /whatsapp/i,
+  /telegram/i,
+  /\btext me\b/i,
+  /\bmessage me on\b/i,
 ];
+
+const SPAM_PATTERNS = [
+  /\bfollow for follow\b/i,
+  /\bf4f\b/i,
+  /\bcheck (my|out my) profile\b/i,
+  /\bpromote (my page|my profile|your page)\b/i,
+  /\bsend pic\b/i,
+  /\bsend nudes\b/i,
+  /\bhot girls?\b/i,
+  /\bwork from home\b/i,
+  /\bmake money fast\b/i,
+  /\bguaranteed returns?\b/i,
+  /\bclick (the )?link\b/i,
+  /\bvisit my page\b/i,
+  /\bcheap followers?\b/i,
+  /\bbuy followers?\b/i,
+];
+
+const URL_PATTERN = /(https?:\/\/|www\.|[a-z0-9-]+\.(com|net|org|co|io|ru|ly|me)\b)/i;
+const PHONE_PATTERN = /(\+?\d[\d\s().-]{7,}\d)/;
+const HANDLE_PATTERN = /@\w+/g;
+const EMOJI_BAIT_PATTERN = /([🔥💰💸📈🚀✨😍])(?:\s*\1){2,}/;
+
+function getSpamHeuristics(commentText) {
+  const text = String(commentText || '').trim();
+  if (!text) return null;
+
+  const triggers = [];
+  let score = 0;
+
+  if (URL_PATTERN.test(text)) {
+    triggers.push('suspicious_link');
+    score += 2;
+  }
+
+  if (PHONE_PATTERN.test(text)) {
+    triggers.push('external_contact');
+    score += 2;
+  }
+
+  const mentions = text.match(HANDLE_PATTERN) || [];
+  if (mentions.length >= 2) {
+    triggers.push('multi_mention');
+    score += 1;
+  }
+
+  if (EMOJI_BAIT_PATTERN.test(text)) {
+    triggers.push('emoji_bait');
+    score += 1;
+  }
+
+  if (SPAM_PATTERNS.some((pattern) => pattern.test(text))) {
+    triggers.push('promo_bait');
+    score += 2;
+  }
+
+  if (SCAM_PATTERNS.some((pattern) => pattern.test(text))) {
+    triggers.push('scam_signal');
+    score += 3;
+  }
+
+  const lettersOnly = text.replace(/[^a-z]/gi, '');
+  if (lettersOnly.length >= 10) {
+    const upperRatio = lettersOnly.replace(/[^A-Z]/g, '').length / lettersOnly.length;
+    if (upperRatio > 0.7) {
+      triggers.push('shouty_caps');
+      score += 1;
+    }
+  }
+
+  if (score < 2) return null;
+
+  const isScam = triggers.includes('scam_signal');
+  return {
+    category: isScam ? 'scam' : 'spam',
+    confidence: isScam ? 0.99 : 0.97,
+    action: 'hide',
+    replyText: null,
+    triggers,
+    severity: isScam ? 'medium' : 'low',
+    reason: `Matched spam heuristic (${triggers.join(', ')})`,
+  };
+}
 
 const NEGATIVE_PATTERNS = [
   /\bterrible\b/i,
@@ -77,6 +165,11 @@ function normalizeClassification(raw) {
 }
 
 function preclassifyComment(commentText) {
+  const spamHeuristic = getSpamHeuristics(commentText);
+  if (spamHeuristic) {
+    return spamHeuristic;
+  }
+
   if (PROFANITY_PATTERNS.some((pattern) => pattern.test(commentText))) {
     return {
       category: 'profanity',
@@ -365,7 +458,7 @@ Comment by @${username}${followerCount ? ` (${followerCount} followers)` : ''}: 
 
 Respond in JSON only, no other text:
 {
-  "category": "positive" | "negative" | "spam" | "question" | "neutral" | "profanity" | "competitor" | "political" | "off_topic" | "scam",
+  "category": "positive" | "negative" | "spam" | "question" | "neutral" | "profanity" | "competitor" | "political" | "off_topic" | "scam" | "ambiguous_negative",
   "confidence": 0.0 to 1.0,
   "action": "reply" | "hide" | "hide_and_flag" | "ignore" | "block",
   "replyText": "your reply text here or null",
@@ -384,7 +477,7 @@ Rules:
 - POLITICAL or controversial content → hide
 - OFF-TOPIC or unrelated → hide
 - NEUTRAL (single emoji tags, ambiguous) → hide (aggressive moderation)
-- Ambiguous negative emojis (💀 😬 etc.) → hide
+- Ambiguous negative emojis (💀 😬 etc.) → category ambiguous_negative, action hide
 
 Special triggers to include in the triggers array:
 - "legitimate_complaint" — if it's a real customer complaint about an experience
@@ -392,6 +485,7 @@ Special triggers to include in the triggers array:
 - "health_safety" — if health or safety is mentioned
 - "verified_large_account" — if the account has ${MODERATION_CONFIG.verifiedFollowerThreshold}+ followers
 - "low_confidence" — if you're unsure about the classification
+- "suspicious_link" / "external_contact" / "multi_mention" / "emoji_bait" / "promo_bait" — if spam signals are present
 
 NEVER reply publicly to complaints. Hide them and flag for human review.
 Keep positive replies to 1-2 sentences, max 200 characters.
