@@ -1,0 +1,99 @@
+import { NextResponse } from 'next/server';
+import { exchangeCodeForToken, getTikTokRedirectUri } from '@/lib/tiktok';
+
+function renderHtml({ title, body, details = [] }) {
+  const detailsHtml = details.length
+    ? `<ul>${details.map((detail) => `<li>${detail}</li>`).join('')}</ul>`
+    : '';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #f7f4ee; color: #1b1b1b; margin: 0; }
+      main { max-width: 760px; margin: 4rem auto; padding: 2rem; background: white; border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.08); }
+      h1 { margin-top: 0; }
+      code { background: #f1ede5; padding: 0.2rem 0.4rem; border-radius: 6px; }
+      a { color: #8a5a20; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${title}</h1>
+      <p>${body}</p>
+      ${detailsHtml}
+      <p><a href="/tiktok/connect">Back to TikTok Connect</a></p>
+    </main>
+  </body>
+</html>`;
+}
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get('code');
+  const state = searchParams.get('state');
+  const error = searchParams.get('error');
+  const errorDescription = searchParams.get('error_description');
+
+  if (error) {
+    return new NextResponse(
+      renderHtml({
+        title: 'TikTok Authorization Error',
+        body: errorDescription || error,
+      }),
+      { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const expectedState = request.cookies.get('tiktok_oauth_state')?.value;
+  const codeVerifier = request.cookies.get('tiktok_oauth_verifier')?.value;
+
+  if (!code || !state || !expectedState || state !== expectedState || !codeVerifier) {
+    return new NextResponse(
+      renderHtml({
+        title: 'TikTok Authorization Incomplete',
+        body: 'TikTok redirected back, but the OAuth state or PKCE verifier was missing or did not match.',
+        details: [
+          `Registered redirect URI should be <code>${getTikTokRedirectUri()}</code>`,
+        ],
+      }),
+      { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const tokenResult = await exchangeCodeForToken({ code, codeVerifier });
+  const response = new NextResponse(
+    renderHtml(
+      tokenResult.ok
+        ? {
+            title: 'TikTok Connected',
+            body: 'TikTok authorization completed successfully. The app received an authorization code and exchanged it for tokens.',
+            details: [
+              `Scopes granted: <code>${tokenResult.data.scope || 'n/a'}</code>`,
+              `Open ID: <code>${tokenResult.data.open_id || 'n/a'}</code>`,
+              `Expires in: <code>${tokenResult.data.expires_in || 'n/a'}</code> seconds`,
+            ],
+          }
+        : {
+            title: 'TikTok Token Exchange Failed',
+            body: 'TikTok returned an error when the app tried to exchange the authorization code for tokens.',
+            details: [
+              `HTTP status: <code>${tokenResult.status}</code>`,
+              `Response: <code>${JSON.stringify(tokenResult.data)}</code>`,
+            ],
+          },
+    ),
+    {
+      status: tokenResult.ok ? 200 : 502,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    },
+  );
+
+  response.cookies.set('tiktok_oauth_state', '', { path: '/', maxAge: 0 });
+  response.cookies.set('tiktok_oauth_verifier', '', { path: '/', maxAge: 0 });
+
+  return response;
+}
