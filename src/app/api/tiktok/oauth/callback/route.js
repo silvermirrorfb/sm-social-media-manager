@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { exchangeCodeForToken, getTikTokRedirectUri } from '@/lib/tiktok';
+import { clearTikTokSessionCookie, setTikTokSessionCookie } from '@/lib/tiktok-session';
+import { logToSheet } from '@/lib/sheets';
 
 function renderHtml({ title, body, details = [] }) {
   const detailsHtml = details.length
@@ -39,6 +41,20 @@ export async function GET(request) {
   const errorDescription = searchParams.get('error_description');
 
   if (error) {
+    await logToSheet({
+      type: 'TIKTOK_OAUTH',
+      username: '',
+      incomingMessage: '',
+      response: '',
+      action: 'oauth_error',
+      category: 'tiktok_oauth',
+      reason: errorDescription || error,
+      confidence: '',
+      severity: 'medium',
+      triggers: 'tiktok,oauth',
+      needsReview: 'YES',
+    });
+
     return new NextResponse(
       renderHtml({
         title: 'TikTok Authorization Error',
@@ -52,6 +68,20 @@ export async function GET(request) {
   const codeVerifier = request.cookies.get('tiktok_oauth_verifier')?.value;
 
   if (!code || !state || !expectedState || state !== expectedState || !codeVerifier) {
+    await logToSheet({
+      type: 'TIKTOK_OAUTH',
+      username: '',
+      incomingMessage: '',
+      response: '',
+      action: 'oauth_incomplete',
+      category: 'tiktok_oauth',
+      reason: 'state_or_pkce_mismatch',
+      confidence: '',
+      severity: 'medium',
+      triggers: 'tiktok,oauth',
+      needsReview: 'YES',
+    });
+
     return new NextResponse(
       renderHtml({
         title: 'TikTok Authorization Incomplete',
@@ -65,6 +95,9 @@ export async function GET(request) {
   }
 
   const tokenResult = await exchangeCodeForToken({ code, codeVerifier });
+  const expiresIn = Number(tokenResult?.data?.expires_in || 0);
+  const expiresAt = expiresIn ? Date.now() + (expiresIn * 1000) : null;
+
   const response = new NextResponse(
     renderHtml(
       tokenResult.ok
@@ -75,6 +108,7 @@ export async function GET(request) {
               `Scopes granted: <code>${tokenResult.data.scope || 'n/a'}</code>`,
               `Open ID: <code>${tokenResult.data.open_id || 'n/a'}</code>`,
               `Expires in: <code>${tokenResult.data.expires_in || 'n/a'}</code> seconds`,
+              'Session was stored securely for this dashboard login.',
             ],
           }
         : {
@@ -94,6 +128,47 @@ export async function GET(request) {
 
   response.cookies.set('tiktok_oauth_state', '', { path: '/', maxAge: 0 });
   response.cookies.set('tiktok_oauth_verifier', '', { path: '/', maxAge: 0 });
+  clearTikTokSessionCookie(response);
+
+  if (tokenResult.ok && tokenResult?.data?.access_token) {
+    setTikTokSessionCookie(response, {
+      accessToken: tokenResult.data.access_token,
+      refreshToken: tokenResult.data.refresh_token || '',
+      openId: tokenResult.data.open_id || '',
+      scope: tokenResult.data.scope || '',
+      expiresIn,
+      expiresAt,
+      createdAt: Date.now(),
+    });
+
+    await logToSheet({
+      type: 'TIKTOK_OAUTH',
+      username: tokenResult.data.open_id || '',
+      incomingMessage: '',
+      response: '',
+      action: 'oauth_connected',
+      category: 'tiktok_oauth',
+      reason: 'token_exchange_success',
+      confidence: '',
+      severity: 'low',
+      triggers: 'tiktok,oauth',
+      needsReview: '',
+    });
+  } else {
+    await logToSheet({
+      type: 'TIKTOK_OAUTH',
+      username: '',
+      incomingMessage: '',
+      response: '',
+      action: 'oauth_failed',
+      category: 'tiktok_oauth',
+      reason: tokenResult?.data?.error_description || JSON.stringify(tokenResult.data || {}),
+      confidence: '',
+      severity: 'high',
+      triggers: 'tiktok,oauth',
+      needsReview: 'YES',
+    });
+  }
 
   return response;
 }

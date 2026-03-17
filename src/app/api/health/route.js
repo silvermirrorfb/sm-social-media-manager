@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getInstagramAccountId, hasEnv } from '@/lib/env';
+import { hasTikTokSessionCrypto } from '@/lib/tiktok-session';
 
 export async function GET() {
   const hasGoogleCreds =
@@ -38,6 +39,7 @@ export async function GET() {
       hasTikTokClientKey,
       hasTikTokClientSecret,
       tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
+      hasTikTokSessionCrypto: hasTikTokSessionCrypto(),
     },
   });
 }

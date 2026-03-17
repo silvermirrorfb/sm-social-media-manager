@@ -6,8 +6,13 @@ import { getInstagramAccountId, hasEnv } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
-function getPlatforms(env) {
+function getPlatforms(env, entries = []) {
   const fbReady = env.facebookWebhookReady;
+  const tiktokEvents = entries.filter((entry) => entry.platform === 'tiktok').length;
+  const tiktokStatus = env.tikTokOAuthReady
+    ? (tiktokEvents > 0 ? 'live' : 'staged')
+    : 'pending';
+
   return [
     {
       key: 'instagram',
@@ -27,9 +32,12 @@ function getPlatforms(env) {
     {
       key: 'tiktok',
       name: 'TikTok',
-      status: 'staged',
-      description:
-        'Reserved for the next channel rollout. Visibility is ready before ingestion is live.',
+      status: tiktokStatus,
+      description: !env.tikTokOAuthReady
+        ? 'TikTok is not ready yet. Add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET in Vercel.'
+        : tiktokEvents > 0
+          ? 'TikTok webhook traffic is reaching production. OAuth and callback routes are active.'
+          : 'TikTok credentials are configured. Waiting for first real webhook traffic.',
     },
   ];
 }
@@ -38,6 +46,7 @@ const CHANNEL_LABELS = {
   all: 'All activity',
   dm: 'DMs',
   comment: 'Comments',
+  other: 'System',
 };
 
 const VIEW_LABELS = {
@@ -64,12 +73,15 @@ function getEnvSnapshot() {
 
   const hasFacebookPageToken = hasEnv('FACEBOOK_PAGE_ACCESS_TOKEN');
   const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
+  const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
+  const hasTikTokClientSecret = hasEnv('TIKTOK_CLIENT_SECRET');
 
   return {
     hasGoogleCreds,
     hasSheetId: hasEnv('GOOGLE_SHEET_ID'),
     metaWebhookReady: hasMetaToken && hasMetaSecret && hasVerifyToken && hasInstagramAccountId,
     facebookWebhookReady: hasFacebookPageToken && hasFacebookPageId && hasMetaSecret && hasVerifyToken,
+    tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
   };
 }
 
@@ -130,10 +142,11 @@ function buildChannelCounts(entries) {
     (acc, entry) => {
       if (entry.channel === 'dm') acc.dm += 1;
       if (entry.channel === 'comment') acc.comment += 1;
+      if (entry.channel === 'other') acc.other += 1;
       acc.all += 1;
       return acc;
     },
-    { all: 0, dm: 0, comment: 0 }
+    { all: 0, dm: 0, comment: 0, other: 0 }
   );
 }
 
@@ -216,6 +229,25 @@ function getTakeoverStatus(platformKey, env, entries) {
     return {
       label: 'Actively answering',
       body: 'Facebook is live. Messenger DMs and Page comments are reaching production and the bot is handling them while the team watches the queue here.',
+    };
+  }
+
+  if (platformKey === 'tiktok') {
+    if (!env.tikTokOAuthReady) {
+      return {
+        label: 'Waiting on platform readiness',
+        body: 'TikTok will stay staged until TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET are set and validated through the TikTok Connect page.',
+      };
+    }
+    if (entries.length === 0) {
+      return {
+        label: 'Configured, watching for traffic',
+        body: 'TikTok credentials are configured and webhook callback is live. Send a TikTok test event or real event to confirm steady ingestion.',
+      };
+    }
+    return {
+      label: 'Actively ingesting',
+      body: 'TikTok events are landing in production. Continue monitoring the queue while we complete full DM/comment action automation.',
     };
   }
 
@@ -336,7 +368,7 @@ function getTopQueue(entries) {
 }
 
 function getVolumeByChannel(entries) {
-  return [
+  const output = [
     {
       key: 'dm',
       label: 'DMs',
@@ -348,6 +380,15 @@ function getVolumeByChannel(entries) {
       count: entries.filter((entry) => entry.channel === 'comment').length,
     },
   ];
+  const otherCount = entries.filter((entry) => entry.channel === 'other').length;
+  if (otherCount > 0) {
+    output.push({
+      key: 'other',
+      label: 'System',
+      count: otherCount,
+    });
+  }
+  return output;
 }
 
 function getAnalytics(entries) {
@@ -418,7 +459,6 @@ function getSeverityClass(severity) {
 
 export default async function DashboardPage({ searchParams }) {
   const env = getEnvSnapshot();
-  const PLATFORMS = getPlatforms(env);
 
   const selectedPlatform = PLATFORMS.some((platform) => platform.key === searchParams?.platform)
     ? searchParams.platform
@@ -430,6 +470,7 @@ export default async function DashboardPage({ searchParams }) {
 
   const rawRows = await getRecentLogRows(250);
   const entries = rawRows.map(normalizeLogRow);
+  const PLATFORMS = getPlatforms(env, entries);
 
   const platformEntries = entries.filter((entry) => entry.platform === selectedPlatform);
   const channelEntries =
@@ -588,10 +629,19 @@ export default async function DashboardPage({ searchParams }) {
                   <p>{env.facebookWebhookReady ? 'Configured and handling production traffic.' : 'Facebook Page credentials not set yet.'}</p>
                 </div>
                 <div className={styles.opsRow}>
+                  <strong>TikTok OAuth</strong>
+                  <p>{env.tikTokOAuthReady ? 'Credentials are configured. Use TikTok Connect to validate account data.' : 'Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to continue.'}</p>
+                </div>
+                <div className={styles.opsRow}>
                   <strong>Last logged event</strong>
                   <p>{formatTimestamp(entries[0]?.timestamp)}</p>
                 </div>
               </div>
+              <p className={styles.toolbarText} style={{ marginTop: 12 }}>
+                TikTok setup and live account checks:
+                {' '}
+                <Link href="/tiktok/connect">open TikTok Connect</Link>.
+              </p>
             </div>
           </div>
 

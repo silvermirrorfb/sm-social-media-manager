@@ -1,76 +1,51 @@
 # Silver Mirror Social Media Manager
 
-AI-powered Instagram DM handling, comment moderation, and social media management for Silver Mirror Facial Bar.
+AI-powered social inbox and moderation system for Silver Mirror Facial Bar.
 
-## What It Does
+## What is live now
 
-### Instagram DMs
-- Automatically responds to direct messages using Claude AI with the full Silver Mirror knowledge base (10 locations, services, pricing, skin concern recommendations)
-- Smart routing: membership questions → memberships@, collaborations → Sierra, complaints → location phone, etc.
-- Handles voice messages, images, and non-text messages gracefully
-- Auto-escalates to human after 4 unresolved exchanges
+- Instagram webhook intake + DM responses
+- Facebook Page webhook intake + messaging support
+- TikTok Login Kit + webhook callback endpoints (review setup in progress)
+- Password-protected operations dashboard
+- Google Sheets activity logging for inbound/outbound events and moderation flags
 
-### Comment Moderation (Aggressive Mode)
-- Classifies every comment: positive, negative, spam, question, profanity, competitor, political, off-topic, scam
-- **Aggressive moderation**: hides anything not clearly positive
-- Replies to positive comments with warm, on-brand responses (30 pre-built templates)
-- Hides + flags legitimate complaints for human review with severity levels
-- Tracks spam count per user — auto-blocks after 3 spam comments in 30 days
-- Confidence-based thresholds: auto-action at ≥85%, human review queue for 50-84%
+## Core routes
 
-### Logging & Monitoring
-- Every DM and moderation action logged to Google Sheets with 12 columns
-- Confidence scores, severity, triggers, and human review flags tracked
-- Dashboard for quick status checks
+- `/dashboard` operations dashboard
+- `/tiktok/connect` TikTok connect and live account check
+- `/api/instagram/webhook` Meta webhook callback (Instagram + Facebook payloads)
+- `/api/tiktok/oauth/start` TikTok OAuth start
+- `/api/tiktok/oauth/callback` TikTok OAuth callback
+- `/api/tiktok/webhook` TikTok webhook callback
+- `/api/health` environment readiness snapshot
+- `/privacy` and `/terms` public policy pages for platform review
 
-## Architecture
+## Environment variables
 
-| Component | Technology |
-|-----------|-----------|
-| Runtime | Next.js 14 (App Router) on Vercel |
-| AI | Claude Sonnet via Anthropic API |
-| Messaging | Meta Instagram Graph API |
-| Logging | Google Sheets API |
-| Moderation | Claude classifier + policy engine |
+See `.env.example` for the complete list. Key groups:
 
-## File Structure
+- Meta/Instagram/Facebook:
+  - `INSTAGRAM_ACCESS_TOKEN`
+  - `INSTAGRAM_APP_SECRET` (or `META_APP_SECRET`)
+  - `META_VERIFY_TOKEN`
+  - `INSTAGRAM_ACCOUNT` or `INSTAGRAM_ACCOUNT_ID` (numeric)
+  - `FACEBOOK_PAGE_ACCESS_TOKEN`
+  - `FACEBOOK_PAGE_ID`
+  - `FACEBOOK_APP_SECRET` (if Facebook uses a different Meta app)
+- TikTok:
+  - `TIKTOK_CLIENT_KEY`
+  - `TIKTOK_CLIENT_SECRET`
+  - `TIKTOK_SCOPES` (optional, comma-separated)
+  - `TIKTOK_SESSION_SECRET` (optional)
+- Sheets + AI:
+  - `GOOGLE_SHEET_ID`
+  - `GOOGLE_SERVICE_ACCOUNT_JSON` (or split email/private key vars)
+  - `ANTHROPIC_API_KEY`
 
-```
-src/
-├── app/
-│   ├── api/
-│   │   ├── instagram/webhook/route.js   # Meta webhook (GET verify + POST events)
-│   │   └── health/route.js              # Health check + env status
-│   ├── dashboard/page.js                # Monitoring dashboard
-│   ├── layout.js
-│   └── page.js
-└── lib/
-    ├── claude.js              # Claude API — DM responses + comment classifier
-    ├── comment-handler.js     # Comment moderation with policy enforcement
-    ├── dm-handler.js          # DM routing, escalation, conversation tracking
-    ├── instagram.js           # Instagram Graph API helpers (send, reply, hide)
-    ├── moderation-policy.js   # Rules, thresholds, severity, escalation config
-    ├── routing.js             # 10 locations + contact directory + fuzzy matching
-    ├── sheets.js              # Google Sheets logging (12-column schema)
-    ├── system-prompt.txt      # Full SM knowledge base + routing + scenarios
-    └── templates.js           # 30 pre-built reply templates
-```
-
-## Setup
+## Local run
 
 1. `git clone https://github.com/silvermirrorfb/sm-social-media-manager.git`
 2. `npm install`
-3. Copy `.env.example` → `.env` and fill in credentials
+3. Copy `.env.example` to `.env.local`
 4. `npm run dev`
-
-Meta env note:
-- Preferred: `INSTAGRAM_APP_SECRET` and `INSTAGRAM_ACCOUNT`
-- If Facebook is connected through a different Meta app, also set `FACEBOOK_APP_SECRET`
-- Legacy fallback still supported: `META_APP_SECRET` and `INSTAGRAM_ACCOUNT_ID`
-- The account value must be the numeric Instagram account ID, not the `@username`
-
-## 10 Locations
-
-NYC: Upper East Side, Flatiron, Bryant Park, Manhattan West, Upper West Side
-DC: Dupont Circle, Navy Yard, Penn Quarter
-Miami: Brickell, Coral Gables
