@@ -450,6 +450,101 @@ function getAnalytics(entries) {
   };
 }
 
+function getTriggerValue(triggers, key) {
+  const text = String(triggers || '');
+  if (!text) return '';
+  const parts = text.split(';');
+  for (const part of parts) {
+    const [rawKey, ...rest] = part.split(':');
+    if ((rawKey || '').trim().toLowerCase() !== key.toLowerCase()) continue;
+    return rest.join(':').trim();
+  }
+  return '';
+}
+
+function getOutreachAnalytics(entries) {
+  const outreachEntries = entries.filter((entry) => {
+    if (entry.category === 'outreach') return true;
+    return entry.action === 'sent' || entry.action === 'send_failed' || entry.action.startsWith('generated_');
+  });
+
+  const campaigns = new Map();
+  const totals = {
+    totalEvents: outreachEntries.length,
+    generatedDrafts: 0,
+    generatedFollowUps: 0,
+    sent: 0,
+    failed: 0,
+    uniqueContacts: 0,
+  };
+  const uniqueContactKeys = new Set();
+
+  for (const entry of outreachEntries) {
+    const action = String(entry.action || '').toLowerCase();
+    const triggerCampaign = getTriggerValue(entry.triggers, 'campaign');
+    const campaignName = triggerCampaign || entry.reason || 'manual_campaign';
+
+    if (!campaigns.has(campaignName)) {
+      campaigns.set(campaignName, {
+        name: campaignName,
+        generatedDrafts: 0,
+        generatedFollowUps: 0,
+        sent: 0,
+        failed: 0,
+        uniqueContacts: new Set(),
+        lastSeen: '',
+      });
+    }
+
+    const campaign = campaigns.get(campaignName);
+    const contactKey = `${entry.platform}:${(entry.username || '').toLowerCase()}`;
+    if (entry.username) {
+      campaign.uniqueContacts.add(contactKey);
+      uniqueContactKeys.add(contactKey);
+    }
+
+    if (action === 'generated_draft') {
+      totals.generatedDrafts += 1;
+      campaign.generatedDrafts += 1;
+    } else if (action.startsWith('generated_followup')) {
+      totals.generatedFollowUps += 1;
+      campaign.generatedFollowUps += 1;
+    } else if (action === 'sent') {
+      totals.sent += 1;
+      campaign.sent += 1;
+    } else if (action === 'send_failed') {
+      totals.failed += 1;
+      campaign.failed += 1;
+    }
+
+    if (!campaign.lastSeen || new Date(entry.timestamp) > new Date(campaign.lastSeen)) {
+      campaign.lastSeen = entry.timestamp;
+    }
+  }
+
+  totals.uniqueContacts = uniqueContactKeys.size;
+
+  const campaignsList = Array.from(campaigns.values())
+    .map((campaign) => ({
+      ...campaign,
+      uniqueContacts: campaign.uniqueContacts.size,
+    }))
+    .sort((a, b) => {
+      const scoreA = a.sent + a.generatedDrafts + a.generatedFollowUps + a.failed;
+      const scoreB = b.sent + b.generatedDrafts + b.generatedFollowUps + b.failed;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      const at = Number.isNaN(new Date(a.lastSeen).getTime()) ? 0 : new Date(a.lastSeen).getTime();
+      const bt = Number.isNaN(new Date(b.lastSeen).getTime()) ? 0 : new Date(b.lastSeen).getTime();
+      return bt - at;
+    })
+    .slice(0, 10);
+
+  return {
+    ...totals,
+    campaigns: campaignsList,
+  };
+}
+
 function getPlatformStatusClass(status) {
   return status === 'live' ? styles.badgeLive : styles.badgePending;
 }
@@ -500,6 +595,7 @@ export default async function DashboardPage({ searchParams }) {
   const topQueue = getTopQueue(platformEntries);
   const volumeByChannel = getVolumeByChannel(platformEntries);
   const analytics = getAnalytics(platformEntries);
+  const outreach = getOutreachAnalytics(platformEntries);
   const answerRate = platformEntries.length
     ? Math.round((summary.answered / platformEntries.length) * 100)
     : 0;
@@ -773,6 +869,75 @@ export default async function DashboardPage({ searchParams }) {
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <div className={styles.panel}>
+            <h2 className={styles.panelTitle}>Outreach performance</h2>
+            {outreach.totalEvents === 0 ? (
+              <div className={styles.emptyState}>
+                Outreach campaign analytics will appear here after drafts or sends are logged for {selectedPlatformConfig.name}.
+              </div>
+            ) : (
+              <>
+                <div className={styles.statsList}>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Generated drafts</span>
+                    <span className={styles.statValue}>{outreach.generatedDrafts}</span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Generated follow-ups</span>
+                    <span className={styles.statValue}>{outreach.generatedFollowUps}</span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Sent live</span>
+                    <span className={styles.statValue}>{outreach.sent}</span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Send failures</span>
+                    <span className={styles.statValue}>{outreach.failed}</span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Unique contacts</span>
+                    <span className={styles.statValue}>{outreach.uniqueContacts}</span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <span className={styles.statLabel}>Total outreach events</span>
+                    <span className={styles.statValue}>{outreach.totalEvents}</span>
+                  </div>
+                </div>
+
+                <div className={styles.tableWrap} style={{ marginTop: 16 }}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Campaign</th>
+                        <th>Drafts</th>
+                        <th>Follow-ups</th>
+                        <th>Sent</th>
+                        <th>Failed</th>
+                        <th>Contacts</th>
+                        <th>Last activity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outreach.campaigns.map((campaign) => (
+                        <tr key={campaign.name}>
+                          <td>{campaign.name}</td>
+                          <td>{campaign.generatedDrafts}</td>
+                          <td>{campaign.generatedFollowUps}</td>
+                          <td>{campaign.sent}</td>
+                          <td>{campaign.failed}</td>
+                          <td>{campaign.uniqueContacts}</td>
+                          <td>{formatTimestamp(campaign.lastSeen)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         </section>
 

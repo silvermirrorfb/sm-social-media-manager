@@ -1,5 +1,16 @@
 # Live Handoff Log
 
+## 2026-03-17 07:09 ET
+
+### Completed
+- Added campaign-level outreach analytics to `/dashboard`:
+  - outreach KPI tiles (drafts, follow-ups, sent, failed, unique contacts, total events)
+  - per-campaign outreach table with last activity timestamp
+- Analytics are filtered by the currently selected platform tab (Instagram/Facebook/TikTok).
+
+### Validation
+- `npm run build` passed after adding outreach analytics section.
+
 ## 2026-03-17 00:18 ET
 
 ### Completed
