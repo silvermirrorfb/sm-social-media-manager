@@ -28,7 +28,7 @@ async function sendRepeatSpamAlert({
   triggers,
   reason,
 }) {
-  const recipient = ESCALATION_CONTACTS.socialMediaManager?.email || 'sierra.case@silvermirror.com';
+  const recipient = ESCALATION_CONTACTS.socialMediaManager?.email || 'inquiries@silvermirror.com';
   const safeComment = String(commentText || '(empty)')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
@@ -79,7 +79,7 @@ async function sendComplaintAlert({
     ESCALATION_CONTACTS.general?.email,
     ESCALATION_CONTACTS.socialMediaManager?.email,
   ].filter(Boolean);
-  const recipient = Array.from(new Set(recipients)).join(', ') || 'hello@silvermirror.com';
+  const recipient = Array.from(new Set(recipients)).join(', ') || 'inquiries@silvermirror.com';
   const safeComment = String(commentText || '(empty)')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');

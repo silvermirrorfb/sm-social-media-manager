@@ -148,16 +148,16 @@ export function getAllLocations() {
 // ─── Contact Routing ────────────────────────────────────────
 export const CONTACTS = {
   collaborations: {
-    name: 'Sierra Case',
-    email: 'sierra.case@silvermirror.com',
+    name: 'Marketing Team',
+    email: 'inquiries@silvermirror.com',
     role: 'Collaborations / Influencer / Partnerships',
   },
   press: {
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
     role: 'Press / Media Inquiries',
   },
   events: {
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
     contactName: 'Rachael',
     role: 'Events (bachelorette, birthdays, corporate)',
   },
@@ -168,7 +168,7 @@ export const CONTACTS = {
     faqUrl: 'https://silvermirror.com/our-story/memberships-faq',
   },
   general: {
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
     phone: '(888) 677-0055',
     role: 'General Support',
   },
@@ -177,7 +177,7 @@ export const CONTACTS = {
     role: 'QA / Tech Issues',
   },
   products: {
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
     shopEmail: 'shop@silvermirror.com',
     shopUrl: 'https://shop.silvermirror.com',
     role: 'Product / E-commerce',
@@ -188,7 +188,7 @@ export const CONTACTS = {
   },
   giftCards: {
     purchaseUrl: 'https://booking.silvermirror.com/giftcards',
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
     role: 'Gift Cards',
   },
 };

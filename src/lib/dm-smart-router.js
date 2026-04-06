@@ -113,7 +113,7 @@ export function getSmartDMResponse(messageText) {
   }
 
   if (hasAny(text, [/(product|skincare|return|refund|order number|shop)/])) {
-    return `For product questions, email ${CONTACTS.products.email}. For online shop items, you can also browse here: ${SHOP_URL}. If you need return help, send hello@silvermirror.com your order number and details.`;
+    return `For product questions, email ${CONTACTS.products.email}. For online shop items, you can also browse here: ${SHOP_URL}. If you need return help, send ${CONTACTS.products.email} your order number and details.`;
   }
 
   if (hasAny(text, [/(career|job|hiring|position|work there)/])) {

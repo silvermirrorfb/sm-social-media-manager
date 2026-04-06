@@ -80,7 +80,7 @@ export const REPLY_RULES = {
 // ── Escalation Contacts ──
 export const ESCALATION_CONTACTS = {
   general: {
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
     phone: '(888) 677-0055',
   },
   memberships: {
@@ -88,20 +88,20 @@ export const ESCALATION_CONTACTS = {
     phone: '(888) 677-0055',
   },
   collaborations: {
-    name: 'Sierra Case',
-    email: 'sierra.case@silvermirror.com',
+    name: 'Marketing Team',
+    email: 'inquiries@silvermirror.com',
   },
   events: {
     name: 'Rachael',
-    email: 'hello@silvermirror.com',
+    email: 'inquiries@silvermirror.com',
   },
   qa: {
     email: 'qatesting@silvermirror.com',
   },
   // Moderation log reviewer — checks daily
   socialMediaManager: {
-    name: 'Sierra Case',
-    email: 'sierra.case@silvermirror.com',
+    name: 'Marketing Team',
+    email: 'inquiries@silvermirror.com',
   },
 };
 
