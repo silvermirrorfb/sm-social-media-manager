@@ -26,6 +26,8 @@ export async function GET() {
     hasEnv('SMTP_PASS') &&
     hasEnv('SMTP_FROM', 'SMTP_USER');
 
+  const hasCrmSync = hasEnv('REPLIT_CRM_BASE_URL') && hasEnv('REPLIT_SYNC_API_KEY');
+
   return NextResponse.json({
     status: 'ok',
     app: 'sm-social-media-manager',
@@ -49,6 +51,7 @@ export async function GET() {
       tikTokOpsQueueReady,
       hasTikTokSessionCrypto: hasTikTokSessionCrypto(),
       hasEmailAlerts,
+      hasCrmSync,
     },
   });
 }

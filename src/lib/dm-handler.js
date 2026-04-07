@@ -2,6 +2,8 @@ import { sendDirectMessage, getUserProfile } from './instagram';
 import { generateDMResponse } from './claude';
 import { logToSheet } from './sheets';
 import { getSmartDMResponse } from './dm-smart-router';
+import { isContactedInfluencer, notifyInboundReply } from './crm-sync';
+import { sendEmail } from './email';
 
 // ─── In-memory conversation store ───────────────────────────
 // TODO: Migrate to Redis for serverless durability
@@ -120,6 +122,42 @@ export async function handleDirectMessage(event) {
   }
 
   console.log(`[DM] Received from ${senderId}: ${messageText.substring(0, 80)}...`);
+
+  // === CRM INFLUENCER CHECK — must run before smart router or Claude ===
+  try {
+    const profile = await getUserProfile(senderId).catch(() => null);
+    const senderUsername = profile?.username || null;
+    if (senderUsername) {
+      const influencerInfo = await isContactedInfluencer(senderUsername);
+      if (influencerInfo) {
+        console.log(`[INFLUENCER] Suppressing auto-reply for @${senderUsername} (CRM status: ${influencerInfo.status}, owner: ${influencerInfo.owner})`);
+        await logToSheet({
+          type: 'INFLUENCER_INBOUND',
+          timestamp: new Date().toISOString(),
+          username: senderUsername,
+          incomingMessage: messageText,
+          response: '[SUPPRESSED — Active outreach lead]',
+          action: 'suppressed',
+          category: 'influencer_outreach',
+          reason: `CRM lead (${influencerInfo.status}) — owner: ${influencerInfo.owner || 'unassigned'}`,
+          confidence: '1.00',
+          severity: 'info',
+          triggers: 'crm_sync',
+          needsReview: 'YES',
+        }).catch(() => {});
+        await notifyInboundReply(senderUsername, 'instagram', messageText).catch(() => {});
+        await sendEmail({
+          to: 'inquiries@silvermirror.com',
+          subject: `Influencer @${senderUsername} replied to outreach DM`,
+          text: `@${senderUsername} (${influencerInfo.name || 'Unknown'}) replied to an outreach DM.\n\nTheir message:\n"${messageText}"\n\nCRM Status: ${influencerInfo.status}\nAssigned to: ${influencerInfo.owner || 'Clara'}\n\nPlease respond manually — the bot has been suppressed for this conversation.`,
+        }).catch((err) => console.error('[INFLUENCER] Email alert failed:', err.message));
+        return; // EXIT — do NOT auto-respond
+      }
+    }
+  } catch (crmErr) {
+    console.error('[CRM-SYNC] DM check failed, falling through to normal handling:', crmErr.message);
+  }
+  // === END CRM INFLUENCER CHECK ===
 
   try {
     // Get conversation history

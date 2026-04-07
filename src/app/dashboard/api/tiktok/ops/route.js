@@ -6,6 +6,7 @@ import {
   updateTikTokOpsTask,
 } from '@/lib/tiktok-ops';
 import { getDashboardCookieName, hasValidDashboardSession } from '@/lib/dashboard-auth';
+import { fetchContactedHandles, normalizeHandle, isCrmConfigured } from '@/lib/crm-sync';
 
 function getSessionReminder() {
   return {
@@ -33,8 +34,23 @@ export async function GET(request) {
 
     const queue = await listTikTokOpsTasks();
 
+    // Enrich tasks with CRM outreach lead status
+    let enrichedTasks = queue.tasks || [];
+    if (isCrmConfigured()) {
+      try {
+        const contactedHandles = await fetchContactedHandles();
+        enrichedTasks = enrichedTasks.map((task) => ({
+          ...task,
+          isOutreachLead: contactedHandles.has(normalizeHandle(task.handle || '')),
+        }));
+      } catch (enrichErr) {
+        console.error('[TikTok-Ops] CRM enrichment failed:', enrichErr.message);
+      }
+    }
+
     return NextResponse.json({
       ...queue,
+      tasks: enrichedTasks,
       sessionReminder: getSessionReminder(),
     });
   } catch (err) {

@@ -18,6 +18,7 @@ import {
 } from './comment-moderation';
 import { ESCALATION_CONTACTS } from './moderation-policy';
 import { sendEmail } from './email';
+import { isContactedInfluencer } from './crm-sync';
 
 async function sendRepeatSpamAlert({
   platform,
@@ -159,6 +160,32 @@ export async function handleComment(commentData) {
     console.log('[Comment] Skipping empty comment');
     return;
   }
+
+  // === CRM INFLUENCER CHECK FOR COMMENTS ===
+  try {
+    const influencerInfo = await isContactedInfluencer(username);
+    if (influencerInfo) {
+      console.log(`[INFLUENCER] Comment from outreach lead @${username} — skipping auto-moderation`);
+      await logToSheet({
+        type: 'INFLUENCER_COMMENT',
+        timestamp: new Date().toISOString(),
+        username,
+        incomingMessage: commentText,
+        response: '[SKIPPED — Active outreach lead, human review required]',
+        action: 'skipped',
+        category: 'influencer_outreach',
+        reason: `CRM lead (${influencerInfo.status})`,
+        confidence: '1.00',
+        severity: 'info',
+        triggers: 'crm_sync',
+        needsReview: 'YES',
+      }).catch(() => {});
+      return; // Do NOT auto-hide, auto-reply, or classify
+    }
+  } catch (crmErr) {
+    console.error('[CRM-SYNC] Comment check failed, falling through:', crmErr.message);
+  }
+  // === END CRM INFLUENCER CHECK ===
 
   try {
     const classification = await classifyComment(commentText, username);

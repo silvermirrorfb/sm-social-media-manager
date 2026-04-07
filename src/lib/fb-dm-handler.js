@@ -2,6 +2,8 @@ import { sendMessengerMessage, getFacebookUserProfile } from './facebook';
 import { generateDMResponse } from './claude';
 import { logToSheet } from './sheets';
 import { getSmartDMResponse } from './dm-smart-router';
+import { isContactedInfluencer, notifyInboundReply } from './crm-sync';
+import { sendEmail } from './email';
 
 // ─── In-memory conversation store ───────────────────────────
 // Mirrors the Instagram DM handler pattern.
@@ -123,6 +125,42 @@ export async function handleMessengerMessage(event) {
   }
 
   console.log(`[FB-DM] Received from ${senderId}: ${messageText.substring(0, 80)}...`);
+
+  // === CRM INFLUENCER CHECK — must run before smart router or Claude ===
+  try {
+    const profile = await getFacebookUserProfile(senderId).catch(() => null);
+    const senderUsername = profile?.username || profile?.name || null;
+    if (senderUsername) {
+      const influencerInfo = await isContactedInfluencer(senderUsername);
+      if (influencerInfo) {
+        console.log(`[INFLUENCER] Suppressing auto-reply for ${senderUsername} (CRM status: ${influencerInfo.status}, owner: ${influencerInfo.owner})`);
+        await logToSheet({
+          type: 'INFLUENCER_INBOUND',
+          timestamp: new Date().toISOString(),
+          username: senderUsername,
+          incomingMessage: messageText,
+          response: '[SUPPRESSED — Active outreach lead]',
+          action: 'suppressed',
+          category: 'influencer_outreach',
+          reason: `CRM lead (${influencerInfo.status}) — owner: ${influencerInfo.owner || 'unassigned'}`,
+          confidence: '1.00',
+          severity: 'info',
+          triggers: 'crm_sync',
+          needsReview: 'YES',
+        }).catch(() => {});
+        await notifyInboundReply(senderUsername, 'facebook', messageText).catch(() => {});
+        await sendEmail({
+          to: 'inquiries@silvermirror.com',
+          subject: `Influencer ${senderUsername} replied via Facebook Messenger`,
+          text: `${senderUsername} (${influencerInfo.name || 'Unknown'}) replied via Messenger.\n\nTheir message:\n"${messageText}"\n\nCRM Status: ${influencerInfo.status}\nAssigned to: ${influencerInfo.owner || 'Clara'}\n\nPlease respond manually — the bot has been suppressed for this conversation.`,
+        }).catch((err) => console.error('[INFLUENCER] Email alert failed:', err.message));
+        return;
+      }
+    }
+  } catch (crmErr) {
+    console.error('[CRM-SYNC] FB-DM check failed, falling through to normal handling:', crmErr.message);
+  }
+  // === END CRM INFLUENCER CHECK ===
 
   try {
     // Get conversation history
