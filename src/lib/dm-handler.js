@@ -1,7 +1,7 @@
 import { sendDirectMessage, getUserProfile } from './instagram';
 import { generateDMResponse } from './claude';
 import { logToSheet } from './sheets';
-import { getSmartDMResponse } from './dm-smart-router';
+import { getSmartDMResponse, SMART_ROUTER_IGNORE } from './dm-smart-router';
 import { isContactedInfluencer, notifyInboundReply } from './crm-sync';
 import { sendEmail } from './email';
 
@@ -183,6 +183,28 @@ export async function handleDirectMessage(event) {
       escalatedThisMessage = true;
     } else {
       const smartReply = getSmartDMResponse(messageText);
+
+      // ─── Phishing/scam detection: silently ignore ─────────────
+      if (smartReply === SMART_ROUTER_IGNORE) {
+        const profile = await getUserProfile(senderId).catch(() => ({ username: senderId }));
+        console.log(`[DM] PHISHING/SCAM detected from ${profile.username || senderId} — ignoring`);
+        await logToSheet({
+          type: 'INSTAGRAM_DM',
+          timestamp: new Date().toISOString(),
+          username: profile.username || senderId,
+          incomingMessage: messageText,
+          response: '[IGNORED — Phishing/scam detected]',
+          action: 'ignored',
+          category: 'phishing',
+          reason: 'Smart router flagged as phishing/scam pattern',
+          confidence: '1.00',
+          severity: 'low',
+          triggers: 'phishing_detection',
+          needsReview: 'no',
+        }).catch(() => {});
+        return; // Do NOT reply to phishing DMs
+      }
+
       responseText = smartReply || await generateDMResponse(messageText, history);
     }
 

@@ -1,7 +1,7 @@
 import { sendMessengerMessage, getFacebookUserProfile } from './facebook';
 import { generateDMResponse } from './claude';
 import { logToSheet } from './sheets';
-import { getSmartDMResponse } from './dm-smart-router';
+import { getSmartDMResponse, SMART_ROUTER_IGNORE } from './dm-smart-router';
 import { isContactedInfluencer, notifyInboundReply } from './crm-sync';
 import { sendEmail } from './email';
 
@@ -187,6 +187,29 @@ export async function handleMessengerMessage(event) {
       escalatedThisMessage = true;
     } else {
       const smartReply = getSmartDMResponse(messageText);
+
+      // ─── Phishing/scam detection: silently ignore ─────────────
+      if (smartReply === SMART_ROUTER_IGNORE) {
+        const profile = await getFacebookUserProfile(senderId).catch(() => null);
+        const displayName = profile?.name || senderId;
+        console.log(`[FB-DM] PHISHING/SCAM detected from ${displayName} — ignoring`);
+        await logToSheet({
+          type: 'FACEBOOK_DM',
+          timestamp: new Date().toISOString(),
+          username: displayName,
+          incomingMessage: messageText,
+          response: '[IGNORED — Phishing/scam detected]',
+          action: 'ignored',
+          category: 'phishing',
+          reason: 'Smart router flagged as phishing/scam pattern',
+          confidence: '1.00',
+          severity: 'low',
+          triggers: 'phishing_detection',
+          needsReview: 'no',
+        }).catch(() => {});
+        return;
+      }
+
       responseText = smartReply || (await generateDMResponse(messageText, history));
     }
 

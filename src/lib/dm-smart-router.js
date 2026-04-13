@@ -62,12 +62,79 @@ function getSkinConcernReply(text) {
   return null;
 }
 
+export const SMART_ROUTER_IGNORE = '__IGNORE__';
+
 export function getSmartDMResponse(messageText) {
   const text = normalize(messageText);
   const location = findLocation(text);
   const skinConcernReply = getSkinConcernReply(text);
 
   if (!text) return null;
+
+  // ─── PHISHING / SCAM DETECTION (must be first) ───────────────
+  // Known phishing patterns that impersonate Meta, Instagram, etc.
+  // Return IGNORE signal — DM handler will log and skip without replying.
+  if (hasAny(text, [
+    /meta policy support/i,
+    /meta (business )?support team/i,
+    /instagram (support|security|policy) team/i,
+    /community guidelines? violation/i,
+    /your (page|account) (will be|has been|is being) (permanently )?(disabled|banned|restricted|suspended|deleted)/i,
+    /confirm your (account|identity|page) (within|before|or)/i,
+    /verify your (account|identity|page) (immediately|now|urgently|within)/i,
+    /click (here|the link|below) to (verify|confirm|appeal|restore)/i,
+    /copyright infringement.*your (page|account)/i,
+    /intellectual property violation/i,
+    /your ad account.*restricted/i,
+    /facebook\.com-\w+\.\w+/i,  // fake Facebook domains like facebook.com-verify.xyz
+    /instagram\.com-\w+\.\w+/i,
+    /bit\.ly|tinyurl|t\.co.*verify/i,  // shortened URLs with verify context
+  ])) {
+    return SMART_ROUTER_IGNORE;
+  }
+
+  // ─── HUMAN ESCALATION REQUEST ────────────────────────────────
+  // Catch explicit requests to talk to a real person.
+  if (hasAny(text, [
+    /\b(speak|talk) to (a )?(human|person|someone|agent|manager|representative|rep)\b/,
+    /\breal person\b/,
+    /\bhuman agent\b/,
+    /\bget me (a )?(human|person|manager|someone)\b/,
+    /\bneed (a )?(human|person|someone real)\b/,
+    /\bconnect me (with|to) (a )?(human|person|someone|agent)\b/,
+    /\btransfer (me )?(to )?(a )?(human|person|someone|agent)\b/,
+    /\bstop (the )?bot\b/,
+    /\byou('re| are) (a |an )?(bot|ai|robot|automated)\b/,
+  ])) {
+    return `Absolutely! The best way to reach our team directly is to call ${GENERAL_PHONE} or email ${CONTACTS.general.email}. If you share the topic or your preferred location, I can give you the most direct number too 💛`;
+  }
+
+  // ─── BUSINESS / PARTNERSHIP / DONATION / PRESS OUTREACH ──────
+  // Catch business inquiries that are NOT customer booking requests.
+  // Must come BEFORE the booking matcher so "available for a call" doesn't
+  // get misrouted as a booking availability question.
+  if (hasAny(text, [
+    /\b(phone call|call) to discuss\b/,
+    /\bpartnership (opportunity|proposal|inquiry)\b/,
+    /\b(discuss|explore) (a )?partnership\b/,
+    /\bdonat(e|ion|ing)\b/,
+    /\bauction\b/,
+    /\bsponsor(ship)?\b/,
+    /\bcharity\b/,
+    /\b(silent|live) auction\b/,
+    /\bfeature (you|your|silver mirror)\b/,
+    /\b(write|writing) (a |an )?(article|feature|piece|story) (about|on|featuring)\b/,
+    /\binterview (you|your|the (team|founder|owner))\b/,
+    /\b(local |neighborhood )?(publication|magazine|newspaper|blog|podcast|newsletter)\b/,
+    /\bpress (inquiry|request|opportunity)\b/,
+    /\bmedia (inquiry|request|opportunity|coverage)\b/,
+    /\breferral (program|partnership|relationship|arrangement)\b/,
+    /\bwholesale\b/,
+    /\bbulk (order|purchase|pricing)\b/,
+    /\bcorporate (gift|gifting|partner)\b/,
+  ])) {
+    return `That sounds great! For business inquiries, partnerships, press, and donations, please email our marketing team at ${CONTACTS.collaborations.email} with the details and someone will follow up within a few days 💛`;
+  }
 
   if (/^(hi|hey|hello|yo|good morning|good afternoon|good evening)[!. ]*$/.test(text)) {
     return pickVariant(text, [
