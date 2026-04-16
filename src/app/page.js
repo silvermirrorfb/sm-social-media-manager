@@ -7,7 +7,7 @@ export default function Home() {
       <p><a href="/tiktok/connect">→ TikTok Connect</a></p>
       <p><a href="/privacy">Privacy Policy</a> {' · '} <a href="/terms">Terms of Service</a></p>
       <p style={{ color: '#888', fontSize: '0.85rem', marginTop: '2rem' }}>
-        Webhook endpoint: <code>/api/instagram/webhook</code>
+        Silver Mirror Facial Bar
       </p>
     </main>
   );
