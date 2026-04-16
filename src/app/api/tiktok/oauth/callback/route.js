@@ -3,6 +3,15 @@ import { exchangeCodeForToken, getTikTokRedirectUri } from '@/lib/tiktok';
 import { clearTikTokSessionCookie, setTikTokSessionCookie } from '@/lib/tiktok-session';
 import { logToSheet } from '@/lib/sheets';
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderHtml({ title, body, details = [] }) {
   const detailsHtml = details.length
     ? `<ul>${details.map((detail) => `<li>${detail}</li>`).join('')}</ul>`
@@ -58,7 +67,7 @@ export async function GET(request) {
     return new NextResponse(
       renderHtml({
         title: 'TikTok Authorization Error',
-        body: errorDescription || error,
+        body: escapeHtml(errorDescription || error),
       }),
       { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     );
@@ -87,7 +96,7 @@ export async function GET(request) {
         title: 'TikTok Authorization Incomplete',
         body: 'TikTok redirected back, but the OAuth state or PKCE verifier was missing or did not match.',
         details: [
-          `Registered redirect URI should be <code>${getTikTokRedirectUri()}</code>`,
+          `Registered redirect URI should be <code>${escapeHtml(getTikTokRedirectUri())}</code>`,
         ],
       }),
       { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
@@ -105,9 +114,9 @@ export async function GET(request) {
             title: 'TikTok Connected',
             body: 'TikTok authorization completed successfully. The app received an authorization code and exchanged it for tokens.',
             details: [
-              `Scopes granted: <code>${tokenResult.data.scope || 'n/a'}</code>`,
-              `Open ID: <code>${tokenResult.data.open_id || 'n/a'}</code>`,
-              `Expires in: <code>${tokenResult.data.expires_in || 'n/a'}</code> seconds`,
+              `Scopes granted: <code>${escapeHtml(tokenResult.data.scope || 'n/a')}</code>`,
+              `Open ID: <code>${escapeHtml(tokenResult.data.open_id || 'n/a')}</code>`,
+              `Expires in: <code>${escapeHtml(tokenResult.data.expires_in || 'n/a')}</code> seconds`,
               'Session was stored securely for this dashboard login.',
             ],
           }
@@ -115,8 +124,8 @@ export async function GET(request) {
             title: 'TikTok Token Exchange Failed',
             body: 'TikTok returned an error when the app tried to exchange the authorization code for tokens.',
             details: [
-              `HTTP status: <code>${tokenResult.status}</code>`,
-              `Response: <code>${JSON.stringify(tokenResult.data)}</code>`,
+              `HTTP status: <code>${escapeHtml(tokenResult.status)}</code>`,
+              `Response: <code>${escapeHtml(JSON.stringify(tokenResult.data))}</code>`,
             ],
           },
     ),
