@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getInstagramAccountId, hasEnv } from '@/lib/env';
 import { hasTikTokSessionCrypto } from '@/lib/tiktok-session';
+import { hasValidDashboardSession, getDashboardCookieName } from '@/lib/dashboard-auth';
 
-export async function GET() {
+export async function GET(request) {
+  const publicResponse = NextResponse.json({
+    status: 'ok',
+    app: 'sm-social-media-manager',
+    timestamp: new Date().toISOString(),
+  });
+
+  const sessionValue = request.cookies.get(getDashboardCookieName())?.value;
+  const isAuthenticated = await hasValidDashboardSession(sessionValue);
+
+  if (!isAuthenticated) {
+    return publicResponse;
+  }
+
   const hasGoogleCreds =
     hasEnv('GOOGLE_SERVICE_ACCOUNT_JSON') ||
     (hasEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL') && hasEnv('GOOGLE_PRIVATE_KEY'));
@@ -13,7 +27,6 @@ export async function GET() {
   const hasVerifyToken = hasEnv('META_VERIFY_TOKEN');
   const hasInstagramAccountId = Boolean(getInstagramAccountId());
 
-  // Facebook Page env checks
   const hasFacebookPageToken = hasEnv('FACEBOOK_PAGE_ACCESS_TOKEN');
   const hasFacebookPageId = hasEnv('FACEBOOK_PAGE_ID');
   const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
