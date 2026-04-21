@@ -757,3 +757,78 @@ Rules:
     reason: parsed.reason || fallback.reason,
   };
 }
+
+export async function generateGoogleRemovalAppeal(task = {}) {
+  if (!getEnv('ANTHROPIC_API_KEY')) {
+    throw new Error('ANTHROPIC_API_KEY is required for Google removal appeal generation');
+  }
+
+  const reviewContext = [
+    `Location: ${task.locationName || 'unknown'}`,
+    `Reviewer: ${task.reviewerName || 'unknown'}`,
+    `Star rating: ${task.starRating || 'unknown'}`,
+    `Review date: ${task.reviewDate || 'unknown'}`,
+    `Disappeared from listing at: ${task.disappearedAt || 'unknown'}`,
+    `Review text: ${task.reviewText || '(empty)'}`,
+  ].join('\n');
+
+  const userPrompt = `You are helping Silver Mirror Facial Bar appeal a 5-star customer review that Google removed from their Business Profile.
+
+About Silver Mirror:
+${getSystemPrompt()}
+
+The removed review:
+${reviewContext}
+
+Write an appeal message Silver Mirror's team will submit through Google Business Profile's "Report a problem" or support form. The appeal should:
+- Be professional, respectful, and concise (under 400 words — Google's appeal forms are short)
+- Reference specific, verifiable details from the review itself showing this is a genuine customer visit
+- Affirm that the review does not violate Google's content policies (no spam, no off-topic content, no fake engagement, no inappropriate content, no conflicts of interest)
+- Not argue or complain about Google's decision — focus on why this specific review should not have been flagged
+- Not promise anything, offer incentives, or sound transactional
+- Match a calm, professional small-business voice
+
+Respond in JSON only:
+{
+  "suggestedAppeal": "the appeal text, ready to submit to Google Business Profile",
+  "confidence": "high | medium | low — how confident you are this review is genuine based on its content",
+  "reason": "brief internal note on why you made the choices you did"
+}
+
+Rules:
+- Never invent customer details not present in the review
+- Never quote more than 15 words of the review verbatim
+- If the review is very short or borderline, lower confidence and keep the appeal generic
+- Never mention the word "algorithm" — Google sensitive to this framing`;
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 900,
+    temperature: 0.3,
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const fallback = {
+    suggestedAppeal: '',
+    confidence: 'low',
+    reason: 'parse error',
+  };
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+  } catch {
+    parsed = fallback;
+  }
+
+  return {
+    suggestedAppeal: parsed.suggestedAppeal || fallback.suggestedAppeal,
+    confidence: parsed.confidence || fallback.confidence,
+    reason: parsed.reason || fallback.reason,
+  };
+}

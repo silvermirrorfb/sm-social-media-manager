@@ -707,6 +707,9 @@ export default async function DashboardPage({ searchParams }) {
               <Link href="/dashboard/yelp" className={styles.logoutButton}>
                 Yelp Appeals
               </Link>
+              <Link href="/dashboard/google" className={styles.logoutButton}>
+                Google Reviews
+              </Link>
               <form action={logoutAction}>
                 <button className={styles.logoutButton} type="submit">
                   Log out
@@ -878,6 +881,11 @@ export default async function DashboardPage({ searchParams }) {
                 Yelp tools:
                 {' '}
                 <Link href="/dashboard/yelp">open Yelp Appeals Console</Link>.
+              </p>
+              <p className={styles.toolbarText} style={{ marginTop: 6 }}>
+                Google tools:
+                {' '}
+                <Link href="/dashboard/google">open Google Review Monitor</Link>.
               </p>
             </div>
           </div>
