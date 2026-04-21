@@ -704,6 +704,9 @@ export default async function DashboardPage({ searchParams }) {
               <Link href="/dashboard/outreach" className={styles.logoutButton}>
                 Outreach CRM
               </Link>
+              <Link href="/dashboard/yelp" className={styles.logoutButton}>
+                Yelp Appeals
+              </Link>
               <form action={logoutAction}>
                 <button className={styles.logoutButton} type="submit">
                   Log out
@@ -870,6 +873,11 @@ export default async function DashboardPage({ searchParams }) {
                 <Link href="/dashboard/tiktok">open TikTok Ops Console</Link>
                 {' · '}
                 <Link href="/tiktok/connect">open TikTok Connect</Link>.
+              </p>
+              <p className={styles.toolbarText} style={{ marginTop: 6 }}>
+                Yelp tools:
+                {' '}
+                <Link href="/dashboard/yelp">open Yelp Appeals Console</Link>.
               </p>
             </div>
           </div>

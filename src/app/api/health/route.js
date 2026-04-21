@@ -32,6 +32,7 @@ export async function GET(request) {
   const hasTikTokClientKey = hasEnv('TIKTOK_CLIENT_KEY');
   const hasTikTokClientSecret = hasEnv('TIKTOK_CLIENT_SECRET');
   const tikTokOpsQueueReady = hasEnv('GOOGLE_SHEET_ID') && hasGoogleCreds;
+  const yelpAppealsReady = hasEnv('GOOGLE_SHEET_ID') && hasGoogleCreds;
   const hasEmailAlerts =
     hasEnv('SMTP_HOST') &&
     hasEnv('SMTP_PORT') &&
@@ -62,6 +63,7 @@ export async function GET(request) {
       hasTikTokClientSecret,
       tikTokOAuthReady: hasTikTokClientKey && hasTikTokClientSecret,
       tikTokOpsQueueReady,
+      yelpAppealsReady,
       hasTikTokSessionCrypto: hasTikTokSessionCrypto(),
       hasEmailAlerts,
       hasCrmSync,

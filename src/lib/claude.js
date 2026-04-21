@@ -681,3 +681,79 @@ Respond ONLY with the JSON object.`;
     };
   }
 }
+
+export async function generateYelpAppeal(task = {}) {
+  if (!getEnv('ANTHROPIC_API_KEY')) {
+    throw new Error('ANTHROPIC_API_KEY is required for Yelp appeal generation');
+  }
+
+  const reviewContext = [
+    `Location: ${task.locationName || 'unknown'}`,
+    `Reviewer: ${task.reviewerName || 'unknown'}`,
+    `Reviewer profile: ${task.reviewerProfileUrl || '(none)'}`,
+    `Star rating: ${task.starRating || 'unknown'}`,
+    `Review date: ${task.reviewDate || 'unknown'}`,
+    `Review text: ${task.reviewText || '(empty)'}`,
+  ].join('\n');
+
+  const userPrompt = `You are helping Silver Mirror Facial Bar appeal a 5-star customer review that Yelp has filtered into the "not currently recommended" section on one of our business pages.
+
+About Silver Mirror:
+${getSystemPrompt()}
+
+The hidden review:
+${reviewContext}
+
+Write an appeal message that Silver Mirror's team will submit through Yelp Business. The appeal should:
+- Be professional, respectful, and concise (under 500 words)
+- Reference specific, verifiable details from the review itself to show this is a genuine customer
+- Note that the reviewer appears to have a real profile (if reviewerProfileUrl is present)
+- Not argue with Yelp's algorithm or complain — focus on why this specific review is authentic
+- Not promise anything, offer incentives, or sound transactional
+- Not use generic "please restore our review" language — tailor it to this review
+- Match a calm, professional small-business voice
+
+Respond in JSON only:
+{
+  "suggestedAppeal": "the appeal text, ready to paste into Yelp Business",
+  "confidence": "high | medium | low — how confident you are this review is genuine based on its content",
+  "reason": "brief internal note on why you made the choices you did"
+}
+
+Rules:
+- Never invent customer details not present in the review
+- Never fabricate dates or visits
+- If the review seems borderline (very short, could be spam), lower confidence to "low" and keep the appeal generic
+- Do not quote more than 15 words of the review verbatim`;
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 900,
+    temperature: 0.3,
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const fallback = {
+    suggestedAppeal: '',
+    confidence: 'low',
+    reason: 'parse error',
+  };
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+  } catch {
+    parsed = fallback;
+  }
+
+  return {
+    suggestedAppeal: parsed.suggestedAppeal || fallback.suggestedAppeal,
+    confidence: parsed.confidence || fallback.confidence,
+    reason: parsed.reason || fallback.reason,
+  };
+}

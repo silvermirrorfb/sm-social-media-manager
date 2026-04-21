@@ -1,0 +1,419 @@
+.page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f6f2e8 0%, #fffdfa 45%, #ffffff 100%);
+  color: #1f1f1a;
+  font-family: Georgia, ui-serif, serif;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  color: #7c5c42;
+  margin-bottom: 0.5rem;
+}
+
+.heading {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.subheading {
+  max-width: 760px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #5c5145;
+  margin: 0.9rem 0 0;
+}
+
+.heroMeta {
+  min-width: 180px;
+  padding: 1rem 1.1rem;
+  background: #1f1f1a;
+  color: #f9f4ed;
+  border-radius: 20px;
+  text-align: center;
+}
+
+.heroMetaLabel {
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.heroMetaValue {
+  font-size: 2.3rem;
+  line-height: 1;
+  margin: 0.35rem 0;
+}
+
+.heroMetaHint {
+  font-size: 0.95rem;
+  opacity: 0.82;
+}
+
+.heroActions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.secondaryLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #d8cdbc;
+  background: #fffdf8;
+  color: #40362d;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.pacingCard {
+  margin: 0 0 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  background: #fff4d6;
+  border: 1px solid #ebcd72;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.pacingCardWarn {
+  background: #ffe0dc;
+  border-color: #f2a79c;
+}
+
+.cardTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.cardText {
+  margin: 0;
+  line-height: 1.5;
+  color: #584d40;
+}
+
+.errorCard {
+  margin: 0 0 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: #ffe0dc;
+  border: 1px solid #f2a79c;
+  color: #7d2418;
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.statusCard {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  border: 1px solid #eadfce;
+  padding: 1rem;
+  box-shadow: 0 18px 45px rgba(95, 76, 52, 0.08);
+}
+
+.statusLabel {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #7c5c42;
+  margin-bottom: 0.45rem;
+}
+
+.statusValue {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.statusList {
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: #5c5145;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 22px;
+  border: 1px solid #eadfce;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 18px 45px rgba(95, 76, 52, 0.08);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.panelTitle {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.panelSubtitle {
+  margin: 0.35rem 0 0;
+  color: #6c6156;
+  line-height: 1.5;
+}
+
+.countBadge {
+  min-width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: #f2eadc;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.filterBar {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filterPill {
+  border: 1px solid #d8cdbc;
+  background: #fffdf9;
+  color: #40362d;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.filterPillActive {
+  background: #1f1f1a;
+  color: #f9f4ed;
+  border-color: #1f1f1a;
+}
+
+.taskStack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.taskCard {
+  border-radius: 18px;
+  border: 1px solid #e6d7c4;
+  background: #fffcf7;
+  padding: 1rem;
+}
+
+.taskHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.6rem;
+}
+
+.taskMeta {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.taskHandle {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.taskTimestamp {
+  font-size: 0.88rem;
+  color: #7b7065;
+}
+
+.taskSecondaryMeta {
+  font-size: 0.86rem;
+  color: #7b7065;
+  margin-top: 0.2rem;
+}
+
+.statusPill {
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  text-transform: capitalize;
+  font-size: 0.84rem;
+  font-weight: 700;
+  background: #ececec;
+}
+
+.messageBox {
+  border-radius: 14px;
+  background: #f8f2e8;
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+  line-height: 1.55;
+  color: #41372e;
+  white-space: pre-wrap;
+}
+
+.inlineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.9rem 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #4f453a;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #d8cab6;
+  padding: 0.8rem 0.9rem;
+  font-size: 0.95rem;
+  background: #fffdf9;
+  color: #1f1f1a;
+  font-family: inherit;
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.primaryButton {
+  border: none;
+  border-radius: 999px;
+  background: #1f1f1a;
+  color: #f9f4ed;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  border: 1px solid #cbb79c;
+  border-radius: 999px;
+  background: #fffdf9;
+  color: #3b3128;
+  padding: 0.78rem 1.15rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.taskFooter {
+  margin-top: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.taskLinks {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.link {
+  color: #83572c;
+  text-decoration: underline;
+}
+
+.linkMuted {
+  color: #7b7065;
+  font-size: 0.88rem;
+}
+
+.taskActions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.emptyState {
+  border-radius: 14px;
+  background: #faf5ec;
+  padding: 1rem;
+  color: #6c6156;
+}
+
+.reviewerMeta {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.ratingStars {
+  color: #c57b00;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.locationBadge {
+  display: inline-block;
+  background: #f0e4d1;
+  color: #5a4330;
+  border-radius: 8px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
