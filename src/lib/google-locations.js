@@ -1,6 +1,5 @@
 // Silver Mirror Google Maps location registry
 // Used for linking to Google review pages per location.
-// Locations marked ADDRESS_ONLY link to the street address, not the business profile.
 
 export const GOOGLE_LOCATIONS = [
   {
@@ -25,15 +24,13 @@ export const GOOGLE_LOCATIONS = [
     id: 'manhattan_west',
     name: 'Manhattan West',
     city: 'New York',
-    url: 'https://www.google.com/maps/place/385+9th+Ave,+New+York,+NY+10001/@40.7522767,-73.9980801,17z',
-    addressOnly: true,
+    url: 'https://www.google.com/maps/place/Silver+Mirror+Facial+Bar+-+Manhattan+West/@40.7522251,-73.9981157,17z',
   },
   {
     id: 'uws',
     name: 'Upper West Side',
     city: 'New York',
-    url: 'https://www.google.com/maps/place/2305+Broadway,+New+York,+NY+10024/@40.7867389,-73.9781542,16z',
-    addressOnly: true,
+    url: 'https://www.google.com/maps/place/Silver+Mirror+Facial+Bar+-+Upper+West+Side/@40.7867389,-73.9781542,17z',
   },
   {
     id: 'dupont',
@@ -51,8 +48,7 @@ export const GOOGLE_LOCATIONS = [
     id: 'penn_quarter',
     name: 'Penn Quarter',
     city: 'Washington DC',
-    url: 'https://www.google.com/maps/place/920+H+St+NW,+Washington,+DC+20268/@38.8996463,-77.0246111,17z',
-    addressOnly: true,
+    url: 'https://www.google.com/maps/place/Silver+Mirror+Facial+Bar+-+Penn+Quarter/@38.8996461,-77.0245956,17z',
   },
   {
     id: 'brickell',
@@ -64,8 +60,7 @@ export const GOOGLE_LOCATIONS = [
     id: 'coral_gables',
     name: 'Coral Gables',
     city: 'Miami',
-    url: 'https://www.google.com/maps/place/2955+Ponce+de+Leon,+Coral+Gables,+FL+33134/@25.7448935,-80.2583191,17z',
-    addressOnly: true,
+    url: 'https://www.google.com/maps/place/Silver+Mirror+Facial+Bar+-+Coral+Gables/@25.7454278,-80.2576065,17z',
   },
 ];
 
@@ -77,6 +72,3 @@ export function getGoogleLocationById(id) {
   return GOOGLE_LOCATIONS.find((loc) => loc.id === id) || null;
 }
 
-export function getGoogleLocationsWithBusinessProfile() {
-  return GOOGLE_LOCATIONS.filter((loc) => !loc.addressOnly);
-}
