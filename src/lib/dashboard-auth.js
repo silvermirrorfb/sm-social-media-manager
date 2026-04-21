@@ -131,7 +131,7 @@ export function getDashboardCookieOptions() {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    path: '/dashboard',
+    path: '/',
     maxAge: 60 * 60 * 12,
   };
 }
