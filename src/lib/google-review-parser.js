@@ -29,13 +29,6 @@ const SELECTORS = {
   reviewTextFallback: 'span[jsname]',
   reviewDate: '.rsqaWe',
   expandMoreButton: 'button[aria-label="See more"]',
-  // The Reviews tab button on the Google Maps left-panel tab bar. Google Maps
-  // only renders the first ~4 featured reviews on the Overview tab; the full
-  // list (50-100+) is gated behind the Reviews tab. Multiple fallback
-  // selectors handle language/markup drift.
-  reviewsTabButton: 'button[role="tab"][aria-label^="Reviews"]',
-  reviewsTabButtonFallback: 'button[role="tab"][data-tab-index="1"]',
-  reviewsTabButtonFallback2: 'button[jsaction*="pane.rating.category"]',
 };
 
 // Source of truth for the in-browser parser. Do not import Node-only modules here — this
@@ -137,122 +130,106 @@ export const GOOGLE_REVIEW_PARSER_SOURCE = `
     } catch (e) {}
   }
 
-  async function __smClickReviewsTab() {
-    // Try each selector in order. If we find a button that's not already selected, click it.
-    var selectors = [
-      __SM_SELECTORS__.reviewsTabButton,
-      __SM_SELECTORS__.reviewsTabButtonFallback,
-      __SM_SELECTORS__.reviewsTabButtonFallback2,
-    ];
-    var tabButton = null;
-    for (var i = 0; i < selectors.length; i++) {
-      var candidates = document.querySelectorAll(selectors[i]);
-      for (var j = 0; j < candidates.length; j++) {
-        var btn = candidates[j];
-        var label = (btn.getAttribute('aria-label') || '').toLowerCase();
-        // Must actually be the Reviews tab (not Overview or About).
-        // Accept "review" anywhere in the label to tolerate i18n variations.
-        if (label.indexOf('review') !== -1) {
-          tabButton = btn;
-          break;
-        }
-      }
-      if (tabButton) break;
-    }
-
-    if (!tabButton) {
-      try {
-        console.log('[Google-Snapshot] Reviews tab button not found — continuing with whatever is currently rendered. This may only capture featured reviews on the Overview tab.');
-      } catch (e) {}
-      return false;
-    }
-
-    // If the tab is already selected, don't click it — clicking a selected tab in
-    // Google Maps sometimes collapses the panel.
-    var alreadySelected = tabButton.getAttribute('aria-selected') === 'true';
-    if (alreadySelected) {
-      try {
-        console.log('[Google-Snapshot] Reviews tab already active — skipping click.');
-      } catch (e) {}
-      return true;
-    }
-
-    try {
-      tabButton.click();
-      console.log('[Google-Snapshot] Clicked Reviews tab. Waiting for panel to render...');
-    } catch (e) {
-      try {
-        console.log('[Google-Snapshot] Reviews tab click failed: ' + (e && e.message || 'unknown'));
-      } catch (e2) {}
-      return false;
-    }
-
-    // Wait for the review panel to render. Google Maps typically loads the reviews
-    // list ~1-2 seconds after tab switch. We poll for 4 seconds max.
-    var maxWaitMs = 4000;
-    var pollIntervalMs = 200;
-    var elapsed = 0;
-    while (elapsed < maxWaitMs) {
-      await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs); });
-      elapsed += pollIntervalMs;
-      var cardCount = document.querySelectorAll(__SM_SELECTORS__.reviewCard).length;
-      if (cardCount >= 5) {
-        // Reviews panel has more than the 4 featured ones — tab switch succeeded.
-        try {
-          console.log('[Google-Snapshot] Reviews tab render confirmed after ' + elapsed + 'ms, ' + cardCount + ' cards visible.');
-        } catch (e) {}
-        return true;
-      }
-    }
-
-    try {
-      console.log('[Google-Snapshot] Reviews tab clicked but card count did not grow within ' + maxWaitMs + 'ms. Proceeding anyway.');
-    } catch (e) {}
-    return true;
+  function __smIsOnReviewsTab() {
+    // Google Maps encodes the active tab in the data segment of the URL.
+    // Reviews tab URLs contain the pattern '!9m1!1b1' (or its variants with
+    // different prefix numbers). Overview tab URLs do not contain this pattern.
+    var href = window.location.href || '';
+    return /!\\d+m\\d+!\\d+b1/.test(href);
   }
 
-  async function __smScrollReviewsPanel(maxScrolls) {
+  function __smBuildReviewsTabUrl() {
+    // Take the current URL and append the reviews-tab data segment if not present.
+    var href = window.location.href;
+    if (__smIsOnReviewsTab()) return href;
+    // Strip any existing data segment starting with '/data=...' to avoid conflicts.
+    var cleaned = href.replace(/\\/data=[^?]*/, '');
+    var questionIdx = cleaned.indexOf('?');
+    var base = questionIdx === -1 ? cleaned : cleaned.substring(0, questionIdx);
+    var query = questionIdx === -1 ? '' : cleaned.substring(questionIdx);
+    // Remove trailing slash if present.
+    base = base.replace(/\\/$/, '');
+    // !9m1!1b1 is Google Maps' stable encoding for "show the Reviews tab on this
+    // Place page". The zero placeholders in !1s and !3d!4d are accepted.
+    return base + '/data=!4m8!3m7!1s0x0:0x0!8m2!3d0!4d0!9m1!1b1' + query;
+  }
+
+  function __smFindReviewsScrollable() {
     var candidates = document.querySelectorAll('div[role="main"], div[aria-label]');
-    var scrollable = null;
     for (var i = 0; i < candidates.length; i++) {
       var el = candidates[i];
-      if (el.scrollHeight > el.clientHeight + 40) {
-        if (el.querySelector(__SM_SELECTORS__.reviewCard)) {
-          scrollable = el;
-          break;
-        }
+      if (el.scrollHeight > el.clientHeight + 40 && el.querySelector(__SM_SELECTORS__.reviewCard)) {
+        return el;
       }
     }
-    if (!scrollable) {
-      var cards = document.querySelectorAll(__SM_SELECTORS__.reviewCard);
-      if (cards.length > 0) {
-        var parent = cards[0].parentElement;
-        while (parent && parent !== document.body) {
-          if (parent.scrollHeight > parent.clientHeight + 40) {
-            scrollable = parent;
-            break;
-          }
-          parent = parent.parentElement;
+    var cards = document.querySelectorAll(__SM_SELECTORS__.reviewCard);
+    if (cards.length > 0) {
+      var parent = cards[0].parentElement;
+      while (parent && parent !== document.body) {
+        if (parent.scrollHeight > parent.clientHeight + 40) {
+          return parent;
         }
+        parent = parent.parentElement;
       }
     }
-    if (!scrollable) return 0;
+    return null;
+  }
 
-    var lastCount = 0;
-    var stableRounds = 0;
-    for (var n = 0; n < (maxScrolls || 12); n++) {
-      scrollable.scrollTop = scrollable.scrollHeight;
-      await new Promise(function (resolve) { setTimeout(resolve, 650); });
-      var currentCount = document.querySelectorAll(__SM_SELECTORS__.reviewCard).length;
-      if (currentCount === lastCount) {
-        stableRounds += 1;
-        if (stableRounds >= 2) break;
+  async function __smScrollReviewsPanel(maxRounds) {
+    var scrollable = __smFindReviewsScrollable();
+    if (!scrollable) {
+      try { console.log('[Google-Snapshot] No scrollable reviews panel found.'); } catch (e) {}
+      return 0;
+    }
+
+    try { console.log('[Google-Snapshot] Starting wheel-event scroll, scrollable: found'); } catch (e) {}
+
+    var rounds = maxRounds || 12;
+    var lastUniqueCount = 0;
+    var stabilizedRounds = 0;
+
+    for (var i = 0; i < rounds; i++) {
+      // Dispatch a series of trusted-looking wheel events. Google's infinite
+      // scroll listener may or may not respond — this is best-effort.
+      for (var w = 0; w < 5; w++) {
+        try {
+          var ev = new WheelEvent('wheel', {
+            deltaY: 600,
+            deltaMode: 0,
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          });
+          scrollable.dispatchEvent(ev);
+        } catch (e) {}
+        // Also try setting scrollTop directly as a fallback.
+        try {
+          scrollable.scrollTop = scrollable.scrollHeight;
+        } catch (e) {}
+      }
+
+      await new Promise(function (resolve) { setTimeout(resolve, 600); });
+
+      var cards = document.querySelectorAll(__SM_SELECTORS__.reviewCard);
+      var unique = new Set();
+      for (var j = 0; j < cards.length; j++) {
+        var id = cards[j].getAttribute('data-review-id');
+        if (id) unique.add(id);
+      }
+      var uniqueCount = unique.size;
+
+      try { console.log('[Google-Snapshot] Scroll ' + i + ': ' + uniqueCount + ' unique reviews'); } catch (e) {}
+
+      if (uniqueCount === lastUniqueCount) {
+        stabilizedRounds++;
+        if (stabilizedRounds >= 2) break;
       } else {
-        stableRounds = 0;
-        lastCount = currentCount;
+        stabilizedRounds = 0;
+        lastUniqueCount = uniqueCount;
       }
     }
-    return lastCount;
+
+    return lastUniqueCount;
   }
 
   async function extractGoogleReviewsFromDom(options) {
@@ -260,13 +237,25 @@ export const GOOGLE_REVIEW_PARSER_SOURCE = `
     var locationId = options.locationId || '';
     var warnings = [];
 
-    // Google Maps only renders the first ~4 featured reviews on the Overview tab;
-    // the full list is gated behind the Reviews tab. Click it first. No-op if we
-    // are already on the reviews panel or the tab doesn't exist.
-    try {
-      await __smClickReviewsTab();
-    } catch (e) {
-      warnings.push('reviews_tab_click_error:' + (e && e.message || 'unknown'));
+    // Google Maps only renders the full review list on the Reviews tab. Clicking
+    // the Reviews tab programmatically doesn't work — Google ignores synthetic
+    // click events. Instead, if we're not on the Reviews tab, open a new window
+    // at the Reviews-tab URL and ask the operator to re-click the bookmarklet.
+    if (!__smIsOnReviewsTab()) {
+      try {
+        console.log('[Google-Snapshot] Not on Reviews tab. Opening new window...');
+      } catch (e) {}
+      var reviewsUrl = __smBuildReviewsTabUrl();
+      try {
+        window.open(reviewsUrl, '_blank');
+      } catch (e) {}
+      return {
+        ok: false,
+        error: 'not_on_reviews_tab',
+        message: 'Opened Reviews tab in a new window. Click the bookmarklet on that tab to capture reviews.',
+        reviews: [],
+        warnings: ['not_on_reviews_tab'],
+      };
     }
 
     try {

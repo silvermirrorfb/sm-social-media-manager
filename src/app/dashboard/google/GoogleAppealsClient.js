@@ -100,6 +100,10 @@ function toGoogleSnapshotBookmarklet(origin, token, locations) {
         ${GOOGLE_REVIEW_PARSER_SOURCE}
 
         var result = await extractGoogleReviewsFromDom({ locationId: match.id, maxScrolls: 14 });
+        if (result && result.error === 'not_on_reviews_tab') {
+          alert('Silver Mirror Google Snapshot: ' + (result.message || 'Opened Reviews tab in a new window. Click the bookmarklet on that tab to capture reviews.'));
+          return;
+        }
         if (!result.reviews || result.reviews.length === 0) {
           alert('Silver Mirror Google Snapshot: no reviews found on ' + match.name + '. Warnings: ' + (result.warnings || []).join(', '));
           return;
@@ -373,10 +377,9 @@ export default function GoogleAppealsClient({ scanToken = '', configuredLocation
             <div>
               <h2 className={styles.panelTitle}>Snapshot Silver Mirror Google pages</h2>
               <p className={styles.panelSubtitle}>
-                Google Maps renders reviews with JavaScript, so Vercel can&rsquo;t scrape them.
-                Install the bookmarklet, open each Silver Mirror Google Maps page, and click the
-                bookmarklet. It automatically switches to the Reviews tab, scrolls to load all
-                reviews, extracts what&rsquo;s visible, and sends the snapshot here for diffing.
+                Click the bookmarklet on each Silver Mirror Google Maps page to capture
+                currently-visible reviews. If not on the Reviews tab, the bookmarklet will
+                open one — click the bookmarklet again on that new tab.
               </p>
             </div>
             <div className={styles.countBadge}>{configuredLocations.length}</div>
@@ -417,9 +420,10 @@ export default function GoogleAppealsClient({ scanToken = '', configuredLocation
                 Clicking <strong>Snapshot All Locations</strong> opens each of the{' '}
                 {configuredLocations.length} configured Silver Mirror Google Maps pages in a
                 new tab, staggered by 5 seconds. On each tab, click the Silver Mirror Google
-                Snapshot bookmarklet — it will automatically switch to the Reviews tab, scroll
-                to load every review, and capture them. The first scan for a location is the
-                baseline; the next scan detects removals.
+                Snapshot bookmarklet. The bookmarklet captures all reviews currently loaded in
+                the DOM. Google Maps lazy-loads reviews only in response to human scrolling,
+                so the first capture may miss the oldest reviews. The snapshot-diff approach
+                still detects removals among captured reviews.
               </p>
               <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
                 <button
