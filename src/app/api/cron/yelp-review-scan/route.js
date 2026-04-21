@@ -14,6 +14,12 @@ function isAuthorizedCron(request) {
 }
 
 export async function GET(request) {
+  // NOTE: This endpoint is currently disabled in production (no schedule in vercel.json).
+  // Yelp returns HTTP 403 for requests from Vercel's datacenter IPs, so the scan runs from
+  // the operator's browser via /dashboard/api/yelp/scan instead. This handler is preserved
+  // for manual runs and for future re-enablement once we have a proxy / residential egress.
+  console.log('[Yelp-Scan] Manual invocation — scheduled cron is disabled (datacenter IP 403).');
+
   if (!isAuthorizedCron(request)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }

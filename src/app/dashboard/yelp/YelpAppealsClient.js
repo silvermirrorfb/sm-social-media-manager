@@ -68,7 +68,50 @@ function renderStars(rating) {
   return '★'.repeat(count) + '☆'.repeat(Math.max(0, 5 - count));
 }
 
-export default function YelpAppealsClient() {
+function toYelpScannerBookmarklet(origin, token, locations) {
+  if (!origin || !token) return '';
+  const scanUrl = `${origin}/dashboard/api/yelp/scan`;
+  const js = `
+    (async function(){
+      try {
+        var here = location.href;
+        var locs = ${JSON.stringify(locations || [])};
+        var match = null;
+        for (var i = 0; i < locs.length; i++) {
+          var lu = String(locs[i].url).replace(/\\/+$/, '');
+          if (here === lu || here.indexOf(lu + '/') === 0 || here.indexOf(lu + '?') === 0) { match = locs[i]; break; }
+          var slugMatch = lu.match(/\\/biz\\/([^\\/?#]+)/);
+          if (slugMatch && here.indexOf('/not_recommended_reviews/' + slugMatch[1]) !== -1) { match = locs[i]; break; }
+        }
+        if (!match) { alert('Silver Mirror Yelp Scanner: open a configured Silver Mirror Yelp business page first.'); return; }
+        var primaryHtml = document.documentElement.outerHTML;
+        var secondaryHtml = null;
+        var linkMatch = primaryHtml.match(/href=\"(\\/not_recommended_reviews\\/[^\"#?]+)\"/i);
+        if (linkMatch && location.pathname.indexOf('/not_recommended_reviews/') === -1) {
+          try {
+            var secondaryRes = await fetch(new URL(linkMatch[1], location.origin).toString(), { credentials: 'include' });
+            if (secondaryRes.ok) secondaryHtml = await secondaryRes.text();
+          } catch (e) {}
+        }
+        var postUrl = ${JSON.stringify(scanUrl)} + '?token=' + encodeURIComponent(${JSON.stringify(token)});
+        var res = await fetch(postUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId: match.id, html: primaryHtml, secondaryHtml: secondaryHtml })
+        });
+        var data = {}; try { data = await res.json(); } catch (e) {}
+        if (res.ok) { alert('Silver Mirror Yelp Scanner\\n' + match.name + ' — ' + (data.newHidden5Star || 0) + ' new 5-star reviews queued. Total hidden found: ' + (data.totalHidden || 0) + '.'); }
+        else { alert('Silver Mirror Yelp Scanner failed: ' + (data.error || res.status)); }
+      } catch (err) { alert('Silver Mirror Yelp Scanner error: ' + (err && err.message || err)); }
+    })();
+  `.replace(/\s+/g, ' ').trim();
+  return `javascript:${js}`;
+}
+
+const SCAN_STAGGER_MS = 3000;
+
+export default function YelpAppealsClient({ scanToken = '', configuredLocations = [] }) {
   const [health, setHealth] = useState(null);
   const [queue, setQueue] = useState({
     ready: false,
@@ -85,6 +128,9 @@ export default function YelpAppealsClient() {
   const [copiedReviewId, setCopiedReviewId] = useState('');
   const [lastSubmittedAt, setLastSubmittedAt] = useState('');
   const [pacingTick, setPacingTick] = useState(0);
+  const [origin, setOrigin] = useState('');
+  const [bookmarkletCopied, setBookmarkletCopied] = useState(false);
+  const [scanProgress, setScanProgress] = useState({ running: false, opened: 0, total: 0, current: '' });
 
   async function refreshDashboard() {
     setError('');
@@ -117,6 +163,7 @@ export default function YelpAppealsClient() {
   }
 
   useEffect(() => {
+    setOrigin(window.location.origin);
     const stored = window.localStorage.getItem(LAST_SUBMIT_KEY) || '';
     setLastSubmittedAt(stored);
     refreshDashboard();
@@ -187,6 +234,50 @@ export default function YelpAppealsClient() {
     setLastSubmittedAt(now);
   }
 
+  async function handleCopyBookmarklet() {
+    const payload = toYelpScannerBookmarklet(origin, scanToken, configuredLocations);
+    if (!payload) return;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setBookmarkletCopied(true);
+      window.setTimeout(() => setBookmarkletCopied(false), 2000);
+    } catch (err) {
+      console.error('Bookmarklet copy failed:', err);
+    }
+  }
+
+  async function handleScanAll() {
+    if (!configuredLocations.length) {
+      setError('No configured Yelp locations to scan.');
+      return;
+    }
+    setError('');
+    setScanProgress({ running: true, opened: 0, total: configuredLocations.length, current: '' });
+
+    for (let i = 0; i < configuredLocations.length; i++) {
+      const location = configuredLocations[i];
+      setScanProgress({
+        running: true,
+        opened: i,
+        total: configuredLocations.length,
+        current: location.name,
+      });
+
+      window.open(location.url, '_blank', 'noopener,noreferrer');
+
+      if (i < configuredLocations.length - 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, SCAN_STAGGER_MS));
+      }
+    }
+
+    setScanProgress({
+      running: false,
+      opened: configuredLocations.length,
+      total: configuredLocations.length,
+      current: '',
+    });
+  }
+
   const tasks = useMemo(() => queue.tasks || [], [queue.tasks]);
   const counts = useMemo(() => {
     const map = Object.fromEntries(STATUS_TABS.map((tab) => [tab.key, 0]));
@@ -215,6 +306,11 @@ export default function YelpAppealsClient() {
   }, [lastSubmittedAt, pacingTick]);
 
   const env = health?.env || {};
+  const bookmarkletHref = useMemo(
+    () => toYelpScannerBookmarklet(origin, scanToken, configuredLocations),
+    [origin, scanToken, configuredLocations]
+  );
+  const scannerReady = Boolean(bookmarkletHref) && configuredLocations.length > 0;
 
   return (
     <main className={styles.page}>
@@ -239,6 +335,100 @@ export default function YelpAppealsClient() {
             <div className={styles.heroMetaValue}>{tasks.length}</div>
             <div className={styles.heroMetaHint}>hidden reviews tracked</div>
           </div>
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <div>
+              <h2 className={styles.panelTitle}>Scan Silver Mirror Yelp pages</h2>
+              <p className={styles.panelSubtitle}>
+                Vercel&rsquo;s datacenter IPs are blocked by Yelp, so the scan runs from
+                your own browser. Install the bookmarklet once, then open each Silver
+                Mirror Yelp page and click the bookmarklet to send that page&rsquo;s
+                HTML into this queue.
+              </p>
+            </div>
+            <div className={styles.countBadge}>{configuredLocations.length}</div>
+          </div>
+
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            <div style={{ borderRadius: '18px', border: '1px solid #e6d7c4', background: '#fffcf7', padding: '1rem' }}>
+              <strong style={{ display: 'block', marginBottom: '0.5rem' }}>1. Install bookmarklet</strong>
+              <p className={styles.cardText}>
+                Drag this button to your bookmarks bar, or copy the code and save it
+                as a bookmark URL. Only install this from the dashboard — don&rsquo;t
+                share it.
+              </p>
+              <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                <a
+                  href={bookmarkletHref || '#'}
+                  onClick={(event) => {
+                    if (!bookmarkletHref) event.preventDefault();
+                  }}
+                  className={styles.primaryButton}
+                  style={{ textDecoration: 'none', cursor: 'grab', display: 'inline-flex', alignItems: 'center' }}
+                >
+                  Silver Mirror Yelp Scanner
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCopyBookmarklet}
+                  className={styles.secondaryButton}
+                  disabled={!bookmarkletHref}
+                >
+                  {bookmarkletCopied ? 'Copied' : 'Copy bookmarklet code'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ borderRadius: '18px', border: '1px solid #e6d7c4', background: '#fffcf7', padding: '1rem' }}>
+              <strong style={{ display: 'block', marginBottom: '0.5rem' }}>2. Scan all locations</strong>
+              <p className={styles.cardText}>
+                Clicking <strong>Scan All Locations</strong> opens each of the{' '}
+                {configuredLocations.length} configured Silver Mirror Yelp pages in a
+                new tab, staggered by 3 seconds. On each tab, click the Silver Mirror
+                Yelp Scanner bookmarklet to send that page&rsquo;s HTML back to this
+                queue. Wait 5–10 seconds between clicks to stay natural.
+              </p>
+              <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={handleScanAll}
+                  className={styles.primaryButton}
+                  disabled={!scannerReady || scanProgress.running}
+                >
+                  {scanProgress.running
+                    ? `Opening ${scanProgress.opened + 1} of ${scanProgress.total}…`
+                    : 'Scan All Locations'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => refreshDashboard()}
+                  className={styles.secondaryButton}
+                >
+                  Refresh queue
+                </button>
+              </div>
+              {scanProgress.running ? (
+                <p className={styles.cardText} style={{ marginTop: '0.5rem' }}>
+                  Opening: <strong>{scanProgress.current}</strong>. Throttling to stay polite with Yelp…
+                </p>
+              ) : null}
+              {!scanProgress.running && scanProgress.opened > 0 ? (
+                <p className={styles.cardText} style={{ marginTop: '0.5rem' }}>
+                  Opened {scanProgress.opened} tab{scanProgress.opened === 1 ? '' : 's'}.
+                  Click the bookmarklet on each tab, then click <strong>Refresh queue</strong> above.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {!scannerReady ? (
+            <p className={styles.cardText} style={{ marginTop: '0.75rem' }}>
+              Scanner is unavailable — make sure the dashboard session is active and
+              at least one Yelp location URL is configured.
+            </p>
+          ) : null}
         </section>
 
         <section
@@ -280,14 +470,14 @@ export default function YelpAppealsClient() {
             lines={[
               `Claude drafting: ${env.hasAnthropicKey ? 'yes' : 'no'}`,
               `Google Sheets: ${env.hasSheetId && env.hasGoogleCreds ? 'yes' : 'no'}`,
-              `Cron auth: ${process.env.NODE_ENV === 'production' ? 'production' : 'dev'}`,
+              `Configured locations: ${configuredLocations.length}`,
             ]}
           />
           <StatusCard
             title="Workflow mode"
             value="Human controlled"
             lines={[
-              'Scanner detects hidden 5-star reviews every 12h.',
+              'Scan runs from operator browser via bookmarklet (Yelp blocks Vercel IPs).',
               'Claude drafts an appeal you can approve.',
               'Final submission happens in Yelp Business, paced manually.',
             ]}

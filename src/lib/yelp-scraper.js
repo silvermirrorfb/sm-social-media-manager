@@ -189,6 +189,86 @@ function dedupeReviews(reviews) {
   return output;
 }
 
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function parseHiddenReviewsFromHtml({ location, primaryHtml, secondaryHtml = null } = {}) {
+  const warnings = [];
+
+  if (!isNonEmptyString(primaryHtml)) {
+    return {
+      ok: false,
+      location: location || null,
+      reviews: [],
+      warnings,
+      error: 'empty_html',
+    };
+  }
+
+  const sources = [];
+
+  if (isNonEmptyString(secondaryHtml)) {
+    // Secondary is the dedicated /not_recommended_reviews/ page when available — always the
+    // richest source. We don't know its exact URL at parse time, so reviewUrl falls back to
+    // the location's biz URL via the caller.
+    sources.push({ html: secondaryHtml, sourceUrl: location?.url || '' });
+  }
+
+  const primaryHasHiddenMarker =
+    SELECTORS.testIdSectionRegex.test(primaryHtml) ||
+    primaryHtml.toLowerCase().includes(SELECTORS.notRecommendedAnchorText);
+
+  if (primaryHasHiddenMarker) {
+    sources.push({ html: primaryHtml, sourceUrl: location?.url || '' });
+  } else if (!isNonEmptyString(secondaryHtml)) {
+    warnings.push('section_not_found_or_empty');
+    return {
+      ok: true,
+      location: location || null,
+      reviews: [],
+      warnings,
+      error: null,
+    };
+  }
+
+  const collected = [];
+  for (const { html, sourceUrl } of sources) {
+    const jsonLd = parseJsonLdReviews(html);
+    const legacy = parseLegacyReviewBlocks(html, { originUrl: sourceUrl });
+    collected.push(...jsonLd, ...legacy);
+  }
+
+  const merged = dedupeReviews(collected).slice(0, MAX_REVIEWS_PER_PAGE);
+
+  if (merged.length === 0) {
+    warnings.push('section_not_found_or_empty');
+  }
+
+  const reviews = merged.map((review) => ({
+    reviewerName: review.reviewerName || '',
+    reviewerProfileUrl: review.reviewerProfileUrl || '',
+    rating: Number.isFinite(review.rating) ? review.rating : null,
+    text: review.text || '',
+    date: review.date || '',
+    reviewUrl: review.reviewUrl || location?.url || '',
+    reviewId: computeReviewId({
+      reviewerName: review.reviewerName,
+      rating: review.rating,
+      text: review.text,
+      locationId: location?.id,
+    }),
+  }));
+
+  return {
+    ok: true,
+    location: location || null,
+    reviews,
+    warnings,
+    error: null,
+  };
+}
+
 export async function scrapeLocationHiddenReviews(location) {
   const warnings = [];
 
@@ -225,72 +305,31 @@ export async function scrapeLocationHiddenReviews(location) {
     };
   }
 
-  let hiddenUrl = extractNotRecommendedUrl(primaryHtml, location.url);
-  let hiddenHtml = '';
-  let hiddenSourceUrl = '';
+  let secondaryHtml = null;
+  const hiddenUrl = extractNotRecommendedUrl(primaryHtml, location.url);
 
   if (hiddenUrl) {
     try {
       const hiddenRes = await fetchWithTimeout(hiddenUrl);
       if (hiddenRes.ok) {
-        hiddenHtml = await hiddenRes.text();
-        hiddenSourceUrl = hiddenUrl;
+        secondaryHtml = await hiddenRes.text();
       } else {
         warnings.push(`hidden_fetch_http_${hiddenRes.status}`);
       }
     } catch (err) {
       warnings.push(`hidden_fetch_error:${err?.name === 'AbortError' ? 'timeout' : (err?.message || 'unknown')}`);
     }
-  } else if (SELECTORS.testIdSectionRegex.test(primaryHtml)) {
-    hiddenHtml = primaryHtml;
-    hiddenSourceUrl = location.url;
-  } else if (primaryHtml.toLowerCase().includes(SELECTORS.notRecommendedAnchorText)) {
-    // We know the page mentions hidden reviews but we couldn't find the dedicated URL.
+  } else if (
+    !SELECTORS.testIdSectionRegex.test(primaryHtml) &&
+    primaryHtml.toLowerCase().includes(SELECTORS.notRecommendedAnchorText)
+  ) {
     warnings.push('not_recommended_link_not_found');
-    hiddenHtml = primaryHtml;
-    hiddenSourceUrl = location.url;
   }
 
-  if (!hiddenHtml) {
-    warnings.push('section_not_found_or_empty');
-    return {
-      ok: true,
-      location,
-      reviews: [],
-      error: null,
-      warnings,
-    };
-  }
-
-  const jsonLdReviews = parseJsonLdReviews(hiddenHtml);
-  const legacyReviews = parseLegacyReviewBlocks(hiddenHtml, { originUrl: hiddenSourceUrl });
-
-  const merged = dedupeReviews([...jsonLdReviews, ...legacyReviews]).slice(0, MAX_REVIEWS_PER_PAGE);
-
-  if (merged.length === 0) {
-    warnings.push('section_not_found_or_empty');
-  }
-
-  const reviews = merged.map((review) => ({
-    reviewerName: review.reviewerName || '',
-    reviewerProfileUrl: review.reviewerProfileUrl || '',
-    rating: Number.isFinite(review.rating) ? review.rating : null,
-    text: review.text || '',
-    date: review.date || '',
-    reviewUrl: review.reviewUrl || hiddenSourceUrl || location.url,
-    reviewId: computeReviewId({
-      reviewerName: review.reviewerName,
-      rating: review.rating,
-      text: review.text,
-      locationId: location.id,
-    }),
-  }));
+  const parsed = parseHiddenReviewsFromHtml({ location, primaryHtml, secondaryHtml });
 
   return {
-    ok: true,
-    location,
-    reviews,
-    error: null,
-    warnings,
+    ...parsed,
+    warnings: [...warnings, ...(parsed.warnings || [])],
   };
 }
