@@ -375,8 +375,8 @@ export default function GoogleAppealsClient({ scanToken = '', configuredLocation
               <p className={styles.panelSubtitle}>
                 Google Maps renders reviews with JavaScript, so Vercel can&rsquo;t scrape them.
                 Install the bookmarklet, open each Silver Mirror Google Maps page, and click the
-                bookmarklet. It waits for the page to render, scrolls to load more reviews,
-                extracts what&rsquo;s visible, and sends the snapshot here for diffing.
+                bookmarklet. It automatically switches to the Reviews tab, scrolls to load all
+                reviews, extracts what&rsquo;s visible, and sends the snapshot here for diffing.
               </p>
             </div>
             <div className={styles.countBadge}>{configuredLocations.length}</div>
@@ -417,8 +417,9 @@ export default function GoogleAppealsClient({ scanToken = '', configuredLocation
                 Clicking <strong>Snapshot All Locations</strong> opens each of the{' '}
                 {configuredLocations.length} configured Silver Mirror Google Maps pages in a
                 new tab, staggered by 5 seconds. On each tab, click the Silver Mirror Google
-                Snapshot bookmarklet. The first scan for a location is the baseline; the next
-                scan detects removals.
+                Snapshot bookmarklet — it will automatically switch to the Reviews tab, scroll
+                to load every review, and capture them. The first scan for a location is the
+                baseline; the next scan detects removals.
               </p>
               <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
                 <button

@@ -29,6 +29,13 @@ const SELECTORS = {
   reviewTextFallback: 'span[jsname]',
   reviewDate: '.rsqaWe',
   expandMoreButton: 'button[aria-label="See more"]',
+  // The Reviews tab button on the Google Maps left-panel tab bar. Google Maps
+  // only renders the first ~4 featured reviews on the Overview tab; the full
+  // list (50-100+) is gated behind the Reviews tab. Multiple fallback
+  // selectors handle language/markup drift.
+  reviewsTabButton: 'button[role="tab"][aria-label^="Reviews"]',
+  reviewsTabButtonFallback: 'button[role="tab"][data-tab-index="1"]',
+  reviewsTabButtonFallback2: 'button[jsaction*="pane.rating.category"]',
 };
 
 // Source of truth for the in-browser parser. Do not import Node-only modules here — this
@@ -130,6 +137,80 @@ export const GOOGLE_REVIEW_PARSER_SOURCE = `
     } catch (e) {}
   }
 
+  async function __smClickReviewsTab() {
+    // Try each selector in order. If we find a button that's not already selected, click it.
+    var selectors = [
+      __SM_SELECTORS__.reviewsTabButton,
+      __SM_SELECTORS__.reviewsTabButtonFallback,
+      __SM_SELECTORS__.reviewsTabButtonFallback2,
+    ];
+    var tabButton = null;
+    for (var i = 0; i < selectors.length; i++) {
+      var candidates = document.querySelectorAll(selectors[i]);
+      for (var j = 0; j < candidates.length; j++) {
+        var btn = candidates[j];
+        var label = (btn.getAttribute('aria-label') || '').toLowerCase();
+        // Must actually be the Reviews tab (not Overview or About).
+        // Accept "review" anywhere in the label to tolerate i18n variations.
+        if (label.indexOf('review') !== -1) {
+          tabButton = btn;
+          break;
+        }
+      }
+      if (tabButton) break;
+    }
+
+    if (!tabButton) {
+      try {
+        console.log('[Google-Snapshot] Reviews tab button not found — continuing with whatever is currently rendered. This may only capture featured reviews on the Overview tab.');
+      } catch (e) {}
+      return false;
+    }
+
+    // If the tab is already selected, don't click it — clicking a selected tab in
+    // Google Maps sometimes collapses the panel.
+    var alreadySelected = tabButton.getAttribute('aria-selected') === 'true';
+    if (alreadySelected) {
+      try {
+        console.log('[Google-Snapshot] Reviews tab already active — skipping click.');
+      } catch (e) {}
+      return true;
+    }
+
+    try {
+      tabButton.click();
+      console.log('[Google-Snapshot] Clicked Reviews tab. Waiting for panel to render...');
+    } catch (e) {
+      try {
+        console.log('[Google-Snapshot] Reviews tab click failed: ' + (e && e.message || 'unknown'));
+      } catch (e2) {}
+      return false;
+    }
+
+    // Wait for the review panel to render. Google Maps typically loads the reviews
+    // list ~1-2 seconds after tab switch. We poll for 4 seconds max.
+    var maxWaitMs = 4000;
+    var pollIntervalMs = 200;
+    var elapsed = 0;
+    while (elapsed < maxWaitMs) {
+      await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs); });
+      elapsed += pollIntervalMs;
+      var cardCount = document.querySelectorAll(__SM_SELECTORS__.reviewCard).length;
+      if (cardCount >= 5) {
+        // Reviews panel has more than the 4 featured ones — tab switch succeeded.
+        try {
+          console.log('[Google-Snapshot] Reviews tab render confirmed after ' + elapsed + 'ms, ' + cardCount + ' cards visible.');
+        } catch (e) {}
+        return true;
+      }
+    }
+
+    try {
+      console.log('[Google-Snapshot] Reviews tab clicked but card count did not grow within ' + maxWaitMs + 'ms. Proceeding anyway.');
+    } catch (e) {}
+    return true;
+  }
+
   async function __smScrollReviewsPanel(maxScrolls) {
     var candidates = document.querySelectorAll('div[role="main"], div[aria-label]');
     var scrollable = null;
@@ -178,6 +259,15 @@ export const GOOGLE_REVIEW_PARSER_SOURCE = `
     options = options || {};
     var locationId = options.locationId || '';
     var warnings = [];
+
+    // Google Maps only renders the first ~4 featured reviews on the Overview tab;
+    // the full list is gated behind the Reviews tab. Click it first. No-op if we
+    // are already on the reviews panel or the tab doesn't exist.
+    try {
+      await __smClickReviewsTab();
+    } catch (e) {
+      warnings.push('reviews_tab_click_error:' + (e && e.message || 'unknown'));
+    }
 
     try {
       await __smScrollReviewsPanel(options.maxScrolls || 12);
