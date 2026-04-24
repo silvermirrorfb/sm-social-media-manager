@@ -458,6 +458,27 @@ export default function GoogleAppealsClient({ scanToken = '', configuredLocation
             </div>
           </div>
 
+          <div
+            style={{
+              marginTop: '1rem',
+              padding: '1rem 1.25rem',
+              border: '1px solid #f0c36d',
+              borderLeft: '4px solid #f0a020',
+              borderRadius: '6px',
+              backgroundColor: '#fff9e8',
+              color: '#5c4a1a',
+              fontSize: '0.9rem',
+              lineHeight: '1.5',
+            }}
+          >
+            <strong>Coverage note.</strong> Automated snapshots capture roughly 8 recent
+            reviews per location from the Overview panel. Google Maps does not allow
+            programmatic access to the full review history, so removals of older reviews may
+            not be detected automatically. As a safety net, do a manual spot-check in your
+            Google Business Profile once a week. If you see the review count drop, add a
+            manual queue entry below.
+          </div>
+
           {!snapshotReady ? (
             <p className={styles.cardText} style={{ marginTop: '0.75rem' }}>
               Snapshot tool is unavailable — make sure the dashboard session is active and at

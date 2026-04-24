@@ -135,7 +135,7 @@ export const GOOGLE_REVIEW_PARSER_SOURCE = `
     // Reviews tab URLs contain the pattern '!9m1!1b1' (or its variants with
     // different prefix numbers). Overview tab URLs do not contain this pattern.
     var href = window.location.href || '';
-    return /!\\d+m\\d+!\\d+b1/.test(href);
+    return /!9m1!1b1/.test(href);
   }
 
   function __smBuildReviewsTabUrl() {
